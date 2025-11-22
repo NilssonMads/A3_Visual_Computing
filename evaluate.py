@@ -23,9 +23,9 @@ class ARSystemEvaluator:
         Initialize evaluator.
         
         Args:
-            calibration_file: Path to camera calibration file
-            checkerboard_size: Tuple of (width, height) internal corners
-            square_size: Size of checkerboard square
+            calibration_file (str): Path to camera calibration file
+            checkerboard_size (tuple): Tuple of (width, height) internal corners
+            square_size (float): Size of checkerboard square
         """
         self.calibrator = CameraCalibrator(checkerboard_size, square_size)
         self.calibrator.load_calibration(calibration_file)

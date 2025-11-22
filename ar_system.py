@@ -23,9 +23,9 @@ class ARSystem:
         Initialize AR system.
         
         Args:
-            calibration_file: Path to calibration file (optional)
-            checkerboard_size: Tuple of (width, height) internal corners
-            square_size: Size of checkerboard square in world units
+            calibration_file (str, optional): Path to calibration file
+            checkerboard_size (tuple): Tuple of (width, height) internal corners
+            square_size (float): Size of checkerboard square in world units
         """
         self.checkerboard_size = checkerboard_size
         self.square_size = square_size

@@ -15,10 +15,10 @@ class PoseEstimator:
         Initialize pose estimator.
         
         Args:
-            camera_matrix: Camera intrinsic matrix
-            dist_coeffs: Distortion coefficients
-            checkerboard_size: Tuple of (width, height) internal corners
-            square_size: Size of checkerboard square in world units
+            camera_matrix (np.ndarray): Camera intrinsic matrix (3x3)
+            dist_coeffs (np.ndarray): Distortion coefficients
+            checkerboard_size (tuple): Tuple of (width, height) internal corners
+            square_size (float): Size of checkerboard square in world units
         """
         self.camera_matrix = camera_matrix
         self.dist_coeffs = dist_coeffs

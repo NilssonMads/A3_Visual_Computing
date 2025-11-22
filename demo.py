@@ -120,7 +120,8 @@ def create_synthetic_checkerboard_view(checkerboard_size=(9, 6), square_size=30,
     warped = cv2.warpPerspective(checkerboard, M, output_size)
     
     # Blend with background
-    mask = (warped > 100).astype(np.uint8) * 255
+    threshold = 100  # Threshold for checkerboard detection
+    mask = (warped > threshold).astype(np.uint8) * 255
     output[mask > 0] = warped[mask > 0, np.newaxis]
     
     return output
