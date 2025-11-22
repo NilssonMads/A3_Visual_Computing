@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 import pickle
 import os
+import argparse
 from pathlib import Path
 
 
@@ -34,14 +35,19 @@ class CameraCalibrator:
         self.obj_points = []  # 3D points in real world space
         self.img_points = []  # 2D points in image plane
         
-    def capture_calibration_images(self, num_images=20):
+    def capture_calibration_images(self, num_images=20, cap=None):
         """
         Capture calibration images from camera
         
         Args:
             num_images: Number of calibration images to capture
+            cap: Camera capture object (if None, uses default camera)
         """
-        cap = cv2.VideoCapture(0)
+        if cap is None:
+            cap = cv2.VideoCapture(0)
+            close_cap = True
+        else:
+            close_cap = False
         
         if not cap.isOpened():
             print("Error: Could not open camera")
@@ -90,7 +96,8 @@ class CameraCalibrator:
             elif key == 13:  # ENTER
                 break
         
-        cap.release()
+        if close_cap:
+            cap.release()
         cv2.destroyAllWindows()
         
         return count > 0
@@ -141,23 +148,65 @@ class CameraCalibrator:
 
 def main():
     """Main calibration routine"""
+    parser = argparse.ArgumentParser(description='Camera Calibration for AR System')
+    parser.add_argument('--android', dest='android_method',
+                       choices=['ipwebcam', 'droidcam', 'rtsp'],
+                       help='Use Android phone camera')
+    parser.add_argument('--url', default='http://192.168.1.100:8080',
+                       help='IP Webcam URL')
+    parser.add_argument('--device-id', type=int, default=1,
+                       help='DroidCam device ID')
+    parser.add_argument('--rtsp-url', default='rtsp://192.168.1.100:8554/live',
+                       help='RTSP stream URL')
+    parser.add_argument('--num-images', type=int, default=15,
+                       help='Number of calibration images to capture')
+    
+    args = parser.parse_args()
+    
     print("=== Camera Calibration ===")
     print("This will calibrate your camera using a checkerboard pattern")
     print("Default: 9x6 inner corners, 25mm squares")
     
+    # Setup camera
+    cap = None
+    if args.android_method:
+        print(f"\nUsing Android camera: {args.android_method}")
+        from android_camera import get_android_camera
+        
+        android_kwargs = {}
+        if args.android_method == 'ipwebcam':
+            android_kwargs['url'] = args.url
+        elif args.android_method == 'droidcam':
+            android_kwargs['device_id'] = args.device_id
+        elif args.android_method == 'rtsp':
+            android_kwargs['rtsp_url'] = args.rtsp_url
+        
+        cap = get_android_camera(args.android_method, **android_kwargs)
+        if not cap.open():
+            print("Failed to open Android camera")
+            return
+    
     calibrator = CameraCalibrator()
     
     # Capture images
-    if not calibrator.capture_calibration_images(num_images=15):
+    if not calibrator.capture_calibration_images(num_images=args.num_images, cap=cap):
         print("Calibration cancelled or failed")
+        if cap:
+            cap.release()
         return
     
     # Get image size
-    cap = cv2.VideoCapture(0)
-    ret, frame = cap.read()
+    if cap is None:
+        test_cap = cv2.VideoCapture(0)
+    else:
+        test_cap = cap
+    
+    ret, frame = test_cap.read()
     if ret:
         h, w = frame.shape[:2]
-        cap.release()
+        
+        if cap is None:
+            test_cap.release()
         
         # Calibrate
         calib_data = calibrator.calibrate((w, h))
@@ -169,6 +218,9 @@ def main():
             print(f"Distortion coefficients:\n{calib_data['distortion_coeffs']}")
     else:
         print("Failed to get image size")
+    
+    if cap:
+        cap.release()
 
 
 if __name__ == "__main__":

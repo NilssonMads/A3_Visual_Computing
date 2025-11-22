@@ -9,6 +9,10 @@ This project implements a minimal augmented reality (AR) system using a checkerb
 ## Features
 
 - **Camera Calibration**: Automated camera calibration using checkerboard patterns
+- **Android Phone Camera Support**: Use your Android phone as a wireless camera
+  - IP Webcam method (recommended)
+  - DroidCam integration
+  - RTSP streaming support
 - **Pose Estimation**: Real-time camera pose estimation relative to the checkerboard
 - **3D Rendering**: Multiple rendering modes including:
   - 3D Cube
@@ -24,7 +28,7 @@ This project implements a minimal augmented reality (AR) system using a checkerb
 ## Requirements
 
 - Python 3.8 or higher
-- Webcam or camera device
+- Webcam, USB camera, **or Android phone with camera**
 - Printed checkerboard pattern (9x6 inner corners, 25mm squares recommended)
 
 ### Python Dependencies
@@ -54,12 +58,75 @@ You can generate a checkerboard pattern using:
 
 **Important**: The pattern should be flat and printed on rigid material for best results.
 
-### 2. Camera Calibration
+### 2. Setup Camera Source
 
-Before using the AR system, you must calibrate your camera:
+You can use either a local webcam or your Android phone as the camera source.
 
+#### Option A: Local Webcam (Default)
+
+Simply connect a USB webcam or use your laptop's built-in camera. No additional setup needed.
+
+#### Option B: Android Phone Camera (Recommended for Mobility)
+
+Use your Android phone as a wireless camera for better flexibility and mobility.
+
+**Method 1: IP Webcam (Easiest)**
+
+1. Install "IP Webcam" app from Google Play Store
+2. Open the app and scroll to the bottom
+3. Tap "Start Server"
+4. Note the URL displayed (e.g., `http://192.168.1.100:8080`)
+5. Ensure your phone and computer are on the same WiFi network
+
+**Method 2: DroidCam**
+
+1. Install "DroidCam" app from Google Play Store
+2. Install DroidCam Client on your computer from https://www.dev47apps.com/droidcam/
+3. Start DroidCam on your phone
+4. Connect via WiFi or USB using the DroidCam Client
+
+**Method 3: RTSP Stream**
+
+1. Install an RTSP streaming app (e.g., "RTSP Camera Server")
+2. Start the RTSP server
+3. Note the RTSP URL
+
+For detailed Android setup instructions:
+```bash
+python android_camera.py --setup
+```
+
+Test your Android camera connection:
+```bash
+# For IP Webcam
+python android_camera.py --method ipwebcam --url http://YOUR_PHONE_IP:8080
+
+# For DroidCam
+python android_camera.py --method droidcam --device-id 1
+
+# For RTSP
+python android_camera.py --method rtsp --rtsp-url rtsp://YOUR_PHONE_IP:8554/live
+```
+
+### 3. Camera Calibration
+
+Before using the AR system, you must calibrate your camera.
+
+**For local webcam:**
 ```bash
 python camera_calibration.py
+```
+
+**For Android phone camera:**
+```bash
+# Using IP Webcam
+python camera_calibration.py --android ipwebcam --url http://YOUR_PHONE_IP:8080
+
+# Using DroidCam
+python camera_calibration.py --android droidcam --device-id 1
+
+# Using RTSP
+python camera_calibration.py --android rtsp --rtsp-url rtsp://YOUR_PHONE_IP:8554/live
 ```
 
 **Instructions**:
@@ -92,7 +159,7 @@ python ar_system.py
 - **S** - Save performance report
 - **ESC** - Exit application
 
-### 4. Evaluate System Performance
+### 5. Evaluate System Performance
 
 Run comprehensive evaluation tests:
 
@@ -115,9 +182,15 @@ A3_Visual_Computing/
 ├── pose_estimation.py      # Pose estimation and tracking
 ├── ar_renderer.py          # 3D object rendering
 ├── ar_system.py            # Main AR application
+├── android_camera.py       # Android phone camera integration
 ├── evaluate_system.py      # Performance evaluation tools
+├── generate_checkerboard.py # Checkerboard pattern generator
+├── test_installation.py    # Installation verification
+├── test_ar_system.py       # Unit tests
 ├── requirements.txt        # Python dependencies
 ├── README.md              # This file
+├── QUICKSTART.md          # Quick start guide
+├── IMPLEMENTATION.md      # Implementation details
 └── calibration.pkl        # Generated camera calibration (after running calibration)
 ```
 
@@ -256,7 +329,14 @@ Options:
 
 Example:
 ```bash
+# Local webcam with custom checkerboard
 python ar_system.py --camera 1 --checkerboard-width 7 --checkerboard-height 5
+
+# Android phone with IP Webcam
+python ar_system.py --android ipwebcam --url http://192.168.1.105:8080
+
+# Android phone with DroidCam and custom checkerboard
+python ar_system.py --android droidcam --device-id 1 --square-size 0.03
 ```
 
 ## References

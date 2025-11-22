@@ -16,6 +16,10 @@ from pygame.locals import *
 class ARRenderer:
     """Renders AR content using OpenGL"""
     
+    # OpenGL clipping plane constants
+    NEAR_CLIP = 0.01   # Near clipping plane in meters
+    FAR_CLIP = 100.0   # Far clipping plane in meters
+    
     def __init__(self, camera_matrix, dist_coeffs, width, height):
         """
         Initialize AR renderer
@@ -63,18 +67,14 @@ class ARRenderer:
         cx = self.camera_matrix[0, 2]
         cy = self.camera_matrix[1, 2]
         
-        # Set up projection matrix
-        near = 0.01
-        far = 100.0
-        
         # Create projection matrix from camera parameters
         projection = np.zeros((4, 4))
         projection[0, 0] = 2.0 * fx / self.width
         projection[1, 1] = 2.0 * fy / self.height
         projection[0, 2] = 1.0 - 2.0 * cx / self.width
         projection[1, 2] = 2.0 * cy / self.height - 1.0
-        projection[2, 2] = -(far + near) / (far - near)
-        projection[2, 3] = -2.0 * far * near / (far - near)
+        projection[2, 2] = -(self.FAR_CLIP + self.NEAR_CLIP) / (self.FAR_CLIP - self.NEAR_CLIP)
+        projection[2, 3] = -2.0 * self.FAR_CLIP * self.NEAR_CLIP / (self.FAR_CLIP - self.NEAR_CLIP)
         projection[3, 2] = -1.0
         
         glLoadMatrixf(projection.T)

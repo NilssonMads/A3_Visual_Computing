@@ -9,6 +9,7 @@ import numpy as np
 import cv2
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -35,21 +36,24 @@ class TestCameraCalibration(unittest.TestCase):
             'rms_error': 0.5
         }
         
-        test_file = '/tmp/test_calib.pkl'
+        # Use temporary file
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.pkl', delete=False) as f:
+            test_file = f.name
         
-        # Save
-        calibrator = CameraCalibrator()
-        calibrator.save_calibration(calib_data, test_file)
-        
-        # Load
-        loaded_data = CameraCalibrator.load_calibration(test_file)
-        
-        self.assertIsNotNone(loaded_data)
-        self.assertTrue(np.allclose(loaded_data['camera_matrix'], calib_data['camera_matrix']))
-        
-        # Cleanup
-        if os.path.exists(test_file):
-            os.remove(test_file)
+        try:
+            # Save
+            calibrator = CameraCalibrator()
+            calibrator.save_calibration(calib_data, test_file)
+            
+            # Load
+            loaded_data = CameraCalibrator.load_calibration(test_file)
+            
+            self.assertIsNotNone(loaded_data)
+            self.assertTrue(np.allclose(loaded_data['camera_matrix'], calib_data['camera_matrix']))
+        finally:
+            # Cleanup
+            if os.path.exists(test_file):
+                os.remove(test_file)
 
 
 class TestPoseEstimation(unittest.TestCase):
@@ -220,18 +224,21 @@ class TestSystemIntegration(unittest.TestCase):
             'rms_error': 0.5
         }
         
-        test_file = '/tmp/test_integration_calib.pkl'
+        # Use temporary file
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.pkl', delete=False) as f:
+            test_file = f.name
         
-        calibrator = CameraCalibrator()
-        calibrator.save_calibration(calib_data, test_file)
-        
-        # Load and verify
-        loaded = CameraCalibrator.load_calibration(test_file)
-        self.assertTrue(np.allclose(loaded['camera_matrix'], calib_data['camera_matrix']))
-        
-        # Cleanup
-        if os.path.exists(test_file):
-            os.remove(test_file)
+        try:
+            calibrator = CameraCalibrator()
+            calibrator.save_calibration(calib_data, test_file)
+            
+            # Load and verify
+            loaded = CameraCalibrator.load_calibration(test_file)
+            self.assertTrue(np.allclose(loaded['camera_matrix'], calib_data['camera_matrix']))
+        finally:
+            # Cleanup
+            if os.path.exists(test_file):
+                os.remove(test_file)
     
     def test_pose_estimation_with_renderer(self):
         """Test pose estimation and rendering together"""

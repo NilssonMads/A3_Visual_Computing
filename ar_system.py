@@ -11,6 +11,7 @@ import argparse
 from camera_calibration import CameraCalibrator
 from pose_estimation import PoseEstimator
 from ar_renderer import SimpleARRenderer
+from android_camera import get_android_camera
 
 
 class ARSystem:
@@ -121,20 +122,36 @@ class ARSystem:
         
         return frame
     
-    def run(self, camera_id=0):
+    def run(self, camera_id=0, use_android=False, android_method='ipwebcam', android_kwargs=None):
         """
         Run AR system
         
         Args:
-            camera_id: Camera device ID
+            camera_id: Camera device ID (for local camera)
+            use_android: Use Android phone camera instead of local camera
+            android_method: Method for Android connection ('ipwebcam', 'droidcam', 'rtsp')
+            android_kwargs: Additional arguments for Android camera
         """
-        cap = cv2.VideoCapture(camera_id)
-        
-        if not cap.isOpened():
-            raise RuntimeError("Could not open camera")
+        if use_android:
+            print("=== Connecting to Android Phone Camera ===")
+            if android_kwargs is None:
+                android_kwargs = {}
+            
+            cap = get_android_camera(android_method, **android_kwargs)
+            
+            if not cap.open():
+                raise RuntimeError("Could not open Android camera")
+            
+            print("✓ Android camera connected successfully\n")
+        else:
+            cap = cv2.VideoCapture(camera_id)
+            
+            if not cap.isOpened():
+                raise RuntimeError("Could not open camera")
         
         print("=== AR System Running ===")
-        print("Controls:")
+        print("Camera Source:", "Android Phone" if use_android else f"Local Camera {camera_id}")
+        print("\nControls:")
         print("  1 - Cube mode")
         print("  2 - Pyramid mode")
         print("  3 - Axes mode")
@@ -209,13 +226,24 @@ def main():
     parser.add_argument('--calibration', default='calibration.pkl',
                        help='Path to calibration file')
     parser.add_argument('--camera', type=int, default=0,
-                       help='Camera device ID')
+                       help='Camera device ID (for local camera)')
     parser.add_argument('--checkerboard-width', type=int, default=9,
                        help='Checkerboard width (inner corners)')
     parser.add_argument('--checkerboard-height', type=int, default=6,
                        help='Checkerboard height (inner corners)')
     parser.add_argument('--square-size', type=float, default=0.025,
                        help='Checkerboard square size in meters')
+    
+    # Android camera options
+    parser.add_argument('--android', dest='android_method', 
+                       choices=['ipwebcam', 'droidcam', 'rtsp'],
+                       help='Use Android phone camera with specified method')
+    parser.add_argument('--url', default='http://192.168.1.100:8080',
+                       help='IP Webcam URL (for --android ipwebcam)')
+    parser.add_argument('--device-id', type=int, default=1,
+                       help='DroidCam device ID (for --android droidcam)')
+    parser.add_argument('--rtsp-url', default='rtsp://192.168.1.100:8554/live',
+                       help='RTSP stream URL (for --android rtsp)')
     
     args = parser.parse_args()
     
@@ -226,7 +254,24 @@ def main():
             square_size=args.square_size
         )
         
-        ar_system.run(camera_id=args.camera)
+        # Prepare Android camera arguments
+        use_android = args.android_method is not None
+        android_kwargs = {}
+        
+        if use_android:
+            if args.android_method == 'ipwebcam':
+                android_kwargs['url'] = args.url
+            elif args.android_method == 'droidcam':
+                android_kwargs['device_id'] = args.device_id
+            elif args.android_method == 'rtsp':
+                android_kwargs['rtsp_url'] = args.rtsp_url
+        
+        ar_system.run(
+            camera_id=args.camera,
+            use_android=use_android,
+            android_method=args.android_method or 'ipwebcam',
+            android_kwargs=android_kwargs
+        )
         
     except Exception as e:
         print(f"Error: {e}")

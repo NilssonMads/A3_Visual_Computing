@@ -8,6 +8,10 @@ import numpy as np
 import argparse
 
 
+# Constants
+MM_PER_INCH = 25.4  # Millimeters per inch conversion factor
+
+
 def generate_checkerboard(width, height, square_size_mm, dpi=300):
     """
     Generate a checkerboard pattern image
@@ -22,7 +26,7 @@ def generate_checkerboard(width, height, square_size_mm, dpi=300):
         Image containing checkerboard pattern
     """
     # Convert mm to pixels
-    pixels_per_mm = dpi / 25.4
+    pixels_per_mm = dpi / MM_PER_INCH
     square_size_px = int(square_size_mm * pixels_per_mm)
     
     # Total number of squares (one more than inner corners)
