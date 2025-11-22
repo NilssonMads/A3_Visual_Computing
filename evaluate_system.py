@@ -8,8 +8,10 @@ import cv2
 import numpy as np
 import time
 import json
+import argparse
 from camera_calibration import CameraCalibrator
 from pose_estimation import PoseEstimator
+from android_camera import get_android_camera
 
 
 class ARSystemEvaluator:
@@ -34,16 +36,22 @@ class ARSystemEvaluator:
             'angles': []
         }
     
-    def evaluate_latency(self, num_frames=100):
+    def evaluate_latency(self, num_frames=100, cap=None):
         """
         Evaluate system latency
         
         Args:
             num_frames: Number of frames to process
+            cap: Camera capture object (if None, uses default camera)
         """
         print(f"\n=== Latency Evaluation ({num_frames} frames) ===")
         
-        cap = cv2.VideoCapture(0)
+        if cap is None:
+            cap = cv2.VideoCapture(0)
+            close_cap = True
+        else:
+            close_cap = False
+        
         latencies = []
         
         for i in range(num_frames):
@@ -61,7 +69,8 @@ class ARSystemEvaluator:
             if (i + 1) % 20 == 0:
                 print(f"Processed {i + 1}/{num_frames} frames")
         
-        cap.release()
+        if close_cap:
+            cap.release()
         
         self.metrics['latency'] = latencies
         
@@ -73,17 +82,22 @@ class ARSystemEvaluator:
         print(f"  Max: {np.max(latencies):.2f} ms")
         print(f"  95th percentile: {np.percentile(latencies, 95):.2f} ms")
     
-    def evaluate_detection_rate(self, duration=30):
+    def evaluate_detection_rate(self, duration=30, cap=None):
         """
         Evaluate detection rate over time
         
         Args:
             duration: Duration in seconds
+            cap: Camera capture object (if None, uses default camera)
         """
         print(f"\n=== Detection Rate Evaluation ({duration}s) ===")
         print("Move the checkerboard around to test detection robustness")
         
-        cap = cv2.VideoCapture(0)
+        if cap is None:
+            cap = cv2.VideoCapture(0)
+            close_cap = True
+        else:
+            close_cap = False
         
         start_time = time.time()
         total_frames = 0
@@ -121,7 +135,8 @@ class ARSystemEvaluator:
             if cv2.waitKey(1) & 0xFF == 27:
                 break
         
-        cap.release()
+        if close_cap:
+            cap.release()
         cv2.destroyAllWindows()
         
         detection_rate = (detected_frames / total_frames * 100) if total_frames > 0 else 0
@@ -135,17 +150,22 @@ class ARSystemEvaluator:
         print(f"Total frames: {total_frames}")
         print(f"Detected frames: {detected_frames}")
     
-    def evaluate_pose_stability(self, duration=10):
+    def evaluate_pose_stability(self, duration=10, cap=None):
         """
         Evaluate pose stability (keep checkerboard still)
         
         Args:
             duration: Duration in seconds
+            cap: Camera capture object (if None, uses default camera)
         """
         print(f"\n=== Pose Stability Evaluation ({duration}s) ===")
         print("Keep the checkerboard as still as possible")
         
-        cap = cv2.VideoCapture(0)
+        if cap is None:
+            cap = cv2.VideoCapture(0)
+            close_cap = True
+        else:
+            close_cap = False
         
         print("Get checkerboard in view and press SPACE to start")
         
@@ -169,7 +189,8 @@ class ARSystemEvaluator:
             if key == 32 and pose_data:  # SPACE
                 break
             elif key == 27:  # ESC
-                cap.release()
+                if close_cap:
+                    cap.release()
                 cv2.destroyAllWindows()
                 return
         
@@ -205,7 +226,8 @@ class ARSystemEvaluator:
             if cv2.waitKey(1) & 0xFF == 27:
                 break
         
-        cap.release()
+        if close_cap:
+            cap.release()
         cv2.destroyAllWindows()
         
         stability = self.pose_estimator.get_pose_stability()
@@ -264,16 +286,59 @@ class ARSystemEvaluator:
 
 def main():
     """Main evaluation routine"""
+    parser = argparse.ArgumentParser(description='AR System Performance Evaluation')
+    parser.add_argument('--calibration', default='calibration.pkl',
+                       help='Path to calibration file')
+    
+    # Android camera options
+    parser.add_argument('--android', dest='android_method', 
+                       choices=['ipwebcam', 'droidcam', 'rtsp'],
+                       help='Use Android phone camera with specified method')
+    parser.add_argument('--url', default='http://192.168.1.100:8080',
+                       help='IP Webcam URL (for --android ipwebcam)')
+    parser.add_argument('--device-id', type=int, default=1,
+                       help='DroidCam device ID (for --android droidcam)')
+    parser.add_argument('--rtsp-url', default='rtsp://192.168.1.100:8554/live',
+                       help='RTSP stream URL (for --android rtsp)')
+    
+    args = parser.parse_args()
+    
     print("=== AR System Evaluator ===")
     print("\nThis will evaluate the AR system performance")
     print("Make sure you have calibrated the camera first")
     
     try:
-        evaluator = ARSystemEvaluator()
+        evaluator = ARSystemEvaluator(calibration_file=args.calibration)
     except ValueError as e:
         print(f"Error: {e}")
         print("Please run camera_calibration.py first")
         return
+    
+    # Setup camera
+    cap = None
+    use_android = args.android_method is not None
+    
+    if use_android:
+        print(f"\n=== Setting up Android Camera ({args.android_method}) ===")
+        android_kwargs = {}
+        
+        if args.android_method == 'ipwebcam':
+            android_kwargs['url'] = args.url
+            print(f"URL: {args.url}")
+        elif args.android_method == 'droidcam':
+            android_kwargs['device_id'] = args.device_id
+            print(f"Device ID: {args.device_id}")
+        elif args.android_method == 'rtsp':
+            android_kwargs['rtsp_url'] = args.rtsp_url
+            print(f"RTSP URL: {args.rtsp_url}")
+        
+        cap = get_android_camera(args.android_method, **android_kwargs)
+        
+        if not cap.open():
+            print("✗ Failed to open Android camera")
+            return
+        
+        print("✓ Android camera connected successfully\n")
     
     print("\nSelect evaluation to run:")
     print("1. Latency")
@@ -284,15 +349,19 @@ def main():
     choice = input("\nEnter choice (1-4): ").strip()
     
     if choice in ['1', '4']:
-        evaluator.evaluate_latency(num_frames=100)
+        evaluator.evaluate_latency(num_frames=100, cap=cap)
     
     if choice in ['2', '4']:
-        evaluator.evaluate_detection_rate(duration=30)
+        evaluator.evaluate_detection_rate(duration=30, cap=cap)
     
     if choice in ['3', '4']:
-        evaluator.evaluate_pose_stability(duration=10)
+        evaluator.evaluate_pose_stability(duration=10, cap=cap)
     
     evaluator.save_report()
+    
+    # Cleanup Android camera
+    if use_android and cap:
+        cap.release()
 
 
 if __name__ == "__main__":
