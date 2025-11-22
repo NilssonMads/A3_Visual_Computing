@@ -47,8 +47,8 @@ def check_opencv_features():
 def check_opengl():
     """Check OpenGL installation"""
     try:
-        from OpenGL.GL import *
-        from OpenGL.GLU import *
+        import OpenGL.GL
+        import OpenGL.GLU
         print("✓ OpenGL is installed")
         
         import pygame

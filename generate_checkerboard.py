@@ -127,17 +127,21 @@ def main():
     print(f"  3. Ensure pattern is not warped or distorted")
     print(f"  4. Verify square size with ruler ({args.square_size} mm)")
     
-    # Display preview
-    print(f"\nDisplaying preview... (press any key to close)")
-    # Resize for display
-    display_height = 800
-    aspect_ratio = img.shape[1] / img.shape[0]
-    display_width = int(display_height * aspect_ratio)
-    img_display = cv2.resize(img, (display_width, display_height))
-    
-    cv2.imshow('Checkerboard Preview', img_display)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # Display preview only if display is available
+    if not args.no_text:
+        try:
+            print(f"\nDisplaying preview... (press any key to close)")
+            # Resize for display
+            display_height = 800
+            aspect_ratio = img.shape[1] / img.shape[0]
+            display_width = int(display_height * aspect_ratio)
+            img_display = cv2.resize(img, (display_width, display_height))
+            
+            cv2.imshow('Checkerboard Preview', img_display)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+        except Exception as e:
+            print(f"Note: Could not display preview (headless mode or no display): {e}")
 
 
 if __name__ == "__main__":
