@@ -20,7 +20,37 @@
 
 ## Step-by-Step Usage
 
-### Step 1: Generate Checkerboard Pattern
+### Step 1: Choose Camera Source
+
+You can use either a local webcam or your Android phone as the camera source.
+
+#### Option A: Local Webcam (Default)
+
+Simply connect a USB webcam or use your laptop's built-in camera. No additional setup needed.
+
+#### Option B: Android Phone Camera (Recommended for Mobility)
+
+Use your Android phone as a wireless camera for better flexibility and mobility.
+
+**Quick Setup - IP Webcam (Recommended):**
+1. Install "IP Webcam" app from Google Play Store
+2. Open the app and tap "Start Server" at the bottom
+3. Note the URL displayed (e.g., `http://192.168.1.100:8080`)
+4. Ensure your phone and computer are on the same WiFi network
+
+**For detailed Android camera setup:**
+```bash
+python android_camera.py --setup
+```
+
+**Test your Android camera:**
+```bash
+python android_camera.py --method ipwebcam --url http://YOUR_PHONE_IP:8080
+```
+
+See `ANDROID_CAMERA.md` for complete Android camera documentation.
+
+### Step 2: Generate Checkerboard Pattern
 
 Generate a printable checkerboard:
 
@@ -40,12 +70,25 @@ python generate_checkerboard.py --output checkerboard.png
 3. Verify square size with a ruler
 4. Mount on cardboard or foam board
 
-### Step 2: Calibrate Camera
+### Step 3: Calibrate Camera
 
 Run camera calibration:
 
+**For local webcam:**
 ```bash
 python camera_calibration.py
+```
+
+**For Android phone camera:**
+```bash
+# Using IP Webcam
+python camera_calibration.py --android ipwebcam --url http://YOUR_PHONE_IP:8080
+
+# Using DroidCam
+python camera_calibration.py --android droidcam --device-id 1
+
+# Using RTSP
+python camera_calibration.py --android rtsp --rtsp-url rtsp://YOUR_PHONE_IP:8554/live
 ```
 
 **Instructions:**
@@ -65,12 +108,25 @@ python camera_calibration.py
 - Cover entire camera field of view
 - Include some extreme angles
 
-### Step 3: Run AR System
+### Step 4: Run AR System
 
 Launch the AR application:
 
+**For local webcam:**
 ```bash
 python ar_system.py
+```
+
+**For Android phone camera:**
+```bash
+# Using IP Webcam
+python ar_system.py --android ipwebcam --url http://YOUR_PHONE_IP:8080
+
+# Using DroidCam
+python ar_system.py --android droidcam --device-id 1
+
+# Using RTSP
+python ar_system.py --android rtsp --rtsp-url rtsp://YOUR_PHONE_IP:8554/live
 ```
 
 **Controls:**
@@ -88,12 +144,25 @@ python ar_system.py
 - 3D objects rendered on checkerboard
 - Position and stability information
 
-### Step 4: Evaluate Performance (Optional)
+### Step 5: Evaluate Performance (Optional)
 
 Run performance evaluation:
 
+**For local webcam:**
 ```bash
 python evaluate_system.py
+```
+
+**For Android phone camera:**
+```bash
+# Using IP Webcam
+python evaluate_system.py --android ipwebcam --url http://YOUR_PHONE_IP:8080
+
+# Using DroidCam
+python evaluate_system.py --android droidcam --device-id 1
+
+# Using RTSP
+python evaluate_system.py --android rtsp --rtsp-url rtsp://YOUR_PHONE_IP:8554/live
 ```
 
 **Choose evaluation type:**
@@ -136,6 +205,13 @@ Results saved to:
 - Check camera permissions
 - Close other apps using camera
 
+### Android camera issues
+- Ensure phone and computer are on same WiFi network
+- Verify the IP address is correct
+- Check firewall isn't blocking the connection
+- Try restarting the camera app on your phone
+- See `ANDROID_CAMERA.md` for detailed troubleshooting
+
 ## Advanced Usage
 
 ### Custom Checkerboard Size
@@ -151,11 +227,13 @@ python ar_system.py --checkerboard-width 7 --checkerboard-height 5 --square-size
 
 ### Multiple Cameras
 
-To use a different camera:
+To use a different local camera:
 
 ```bash
 python ar_system.py --camera 1
 ```
+
+To use Android phone camera, see examples in Step 4 above.
 
 ### Save Calibration for Later
 
@@ -181,7 +259,9 @@ python pose_estimation.py  # Test mode
 | `pose_estimation.py` | Pose estimation (can run standalone) |
 | `ar_renderer.py` | 3D rendering library |
 | `ar_system.py` | Main AR application |
+| `android_camera.py` | Android phone camera integration |
 | `evaluate_system.py` | Performance evaluation |
+| `ANDROID_CAMERA.md` | Android camera setup guide |
 
 ## Performance Expectations
 

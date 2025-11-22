@@ -145,6 +145,14 @@ The system follows a modular architecture with clear separation of concerns:
 
 **Purpose**: Quantify system performance under various conditions.
 
+**Features**:
+- Real-time video processing at 30-60 FPS
+- Multiple rendering modes (cube, pyramid, axes, all)
+- Live performance metrics display
+- Interactive controls
+- Automatic FPS and latency calculation
+- Support for Android phone cameras
+
 **Evaluation Metrics**:
 
 **a) Latency**:
@@ -166,6 +174,55 @@ The system follows a modular architecture with clear separation of concerns:
 **Output Formats**:
 - JSON for programmatic analysis
 - Text for human readability
+
+#### 6. Android Camera Integration (`android_camera.py`)
+
+**Purpose**: Enable using Android phone as a wireless camera source for the AR system.
+
+**Supported Methods**:
+
+**a) IP Webcam** (Recommended):
+- Uses IP Webcam Android app
+- Streams video over WiFi via HTTP
+- Easy setup, no additional software required
+- Good video quality and performance
+
+**b) DroidCam**:
+- Uses DroidCam Android app + desktop client
+- Supports both WiFi and USB connections
+- Excellent video quality
+- Requires DroidCam Client installation
+
+**c) RTSP**:
+- Uses RTSP streaming protocol
+- Requires RTSP-compatible Android app
+- Standard protocol for advanced users
+- Good for custom setups
+
+**Key Features**:
+- Modular design with base class and specialized implementations
+- Consistent API across all connection methods
+- Built-in connection testing and diagnostics
+- Detailed setup instructions and troubleshooting
+- Seamless integration with all AR system components
+
+**Integration**:
+All major components support Android camera:
+- `camera_calibration.py` - Calibrate using Android camera
+- `ar_system.py` - Run AR with Android camera
+- `evaluate_system.py` - Evaluate performance with Android camera
+
+**Usage Example**:
+```bash
+# Calibrate
+python camera_calibration.py --android ipwebcam --url http://192.168.1.100:8080
+
+# Run AR
+python ar_system.py --android ipwebcam --url http://192.168.1.100:8080
+
+# Evaluate
+python evaluate_system.py --android ipwebcam --url http://192.168.1.100:8080
+```
 
 ### Technical Implementation
 
@@ -314,7 +371,7 @@ This implementation is designed for learning:
 - [ ] Markerless tracking (SLAM-based)
 - [ ] Multiple camera fusion
 - [ ] Advanced rendering (PBR, global illumination)
-- [ ] Mobile device support (iOS/Android)
+- [ ] Mobile AR app (native iOS/Android app)
 - [ ] Integration with Unity/Unreal Engine
 
 ### Research Applications
@@ -345,9 +402,10 @@ This system can be extended for research in:
 ### Code Quality
 
 **Testing**:
-- 13 unit tests covering core functionality
+- 17 unit tests covering core functionality
 - All tests passing (100% success rate)
 - Tests for calibration, pose estimation, rendering
+- Tests for Android camera integration
 - Integration tests for workflow
 
 **Documentation**:

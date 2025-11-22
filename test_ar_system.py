@@ -268,6 +268,48 @@ class TestSystemIntegration(unittest.TestCase):
         self.assertEqual(result.shape, frame.shape)
 
 
+class TestAndroidCamera(unittest.TestCase):
+    """Test Android camera module"""
+    
+    def test_android_camera_factory(self):
+        """Test Android camera factory function"""
+        from android_camera import get_android_camera, IPWebcamSource, DroidCamSource, RTSPSource
+        
+        # Test IP Webcam creation
+        cam = get_android_camera('ipwebcam', url='http://192.168.1.100:8080')
+        self.assertIsInstance(cam, IPWebcamSource)
+        
+        # Test DroidCam creation
+        cam = get_android_camera('droidcam', device_id=1)
+        self.assertIsInstance(cam, DroidCamSource)
+        
+        # Test RTSP creation
+        cam = get_android_camera('rtsp', rtsp_url='rtsp://192.168.1.100:8554/live')
+        self.assertIsInstance(cam, RTSPSource)
+    
+    def test_ipwebcam_initialization(self):
+        """Test IPWebcamSource initialization"""
+        from android_camera import IPWebcamSource
+        
+        cam = IPWebcamSource('http://192.168.1.100:8080')
+        self.assertEqual(cam.url, 'http://192.168.1.100:8080/')
+        self.assertEqual(cam.video_url, 'http://192.168.1.100:8080/video')
+    
+    def test_droidcam_initialization(self):
+        """Test DroidCamSource initialization"""
+        from android_camera import DroidCamSource
+        
+        cam = DroidCamSource(device_id=2)
+        self.assertEqual(cam.device_id, 2)
+    
+    def test_rtsp_initialization(self):
+        """Test RTSPSource initialization"""
+        from android_camera import RTSPSource
+        
+        cam = RTSPSource('rtsp://192.168.1.100:8554/live')
+        self.assertEqual(cam.rtsp_url, 'rtsp://192.168.1.100:8554/live')
+
+
 def run_tests():
     """Run all tests"""
     # Create test suite
@@ -280,6 +322,7 @@ def run_tests():
     suite.addTests(loader.loadTestsFromTestCase(TestARRenderer))
     suite.addTests(loader.loadTestsFromTestCase(TestCheckerboardGenerator))
     suite.addTests(loader.loadTestsFromTestCase(TestSystemIntegration))
+    suite.addTests(loader.loadTestsFromTestCase(TestAndroidCamera))
     
     # Run tests
     runner = unittest.TextTestRunner(verbosity=2)
