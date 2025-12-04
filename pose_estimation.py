@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Pose Estimation Module for AR System
-Detects checkerboard and estimates camera pose relative to it
+Optimized Pose Estimation Module for AR System
+Performance improvements for better handling when checkerboard is not detected
 """
 
 import cv2
@@ -10,30 +10,47 @@ import time
 
 
 class PoseEstimator:
-    """Estimates camera pose from checkerboard detection"""
+    """Estimates camera pose from checkerboard detection with performance optimizations"""
     
     def __init__(self, camera_matrix, dist_coeffs, checkerboard_size=(7, 9), 
                  square_size=0.020,
-                 detect_scale=1.0,
-                 detect_interval=1):
+                 detect_scale=0.5,  # Downscale for faster detection
+                 detect_interval=2,  # Skip frames when not detected
+                 adaptive_interval=True):  # Dynamically adjust interval
         """
-        Initialize pose estimator
+        Initialize pose estimator with performance optimizations
         
         Args:
             camera_matrix: Camera intrinsic matrix (3x3)
             dist_coeffs: Distortion coefficients
             checkerboard_size: (width, height) number of inner corners
             square_size: Size of checkerboard square in meters
+            detect_scale: Scale factor for detection (0.5 = half resolution, faster)
+            detect_interval: Process every Nth frame when not detecting
+            adaptive_interval: Automatically adjust interval based on detection success
         """
         self.camera_matrix = camera_matrix
         self.dist_coeffs = dist_coeffs
         self.checkerboard_size = checkerboard_size
         self.square_size = square_size
-        # Detection options: scale input for faster detection and interval
-        # detect_scale < 1.0 will downscale the grayscale image for initial detection
+        
+        # Performance optimization parameters
         self.detect_scale = float(detect_scale)
         self.detect_interval = max(1, int(detect_interval))
+        self.adaptive_interval = adaptive_interval
+        
+        # Adaptive interval state
+        self.current_interval = self.detect_interval
+        self.consecutive_failures = 0
+        self.consecutive_successes = 0
+        self.max_interval = 5  # Don't skip more than every 5th frame
+        
+        # Frame counter for interval-based skipping
         self._frame_counter = 0
+        
+        # Last known good pose (for displaying when skipping)
+        self.last_pose = None
+        self.frames_since_detection = 0
         
         # Prepare object points (3D points in checkerboard coordinate system)
         self.objp = np.zeros((checkerboard_size[0] * checkerboard_size[1], 3), 
@@ -50,41 +67,107 @@ class PoseEstimator:
         self.pose_history = []
         self.max_history = 10
         
-    def detect_and_estimate_pose(self, frame):
+    def should_detect_this_frame(self):
         """
-        Detect checkerboard and estimate pose
+        Determine if detection should run on this frame
+        
+        Returns:
+            bool: True if detection should run
+        """
+        self._frame_counter += 1
+        
+        # Always detect on first frame
+        if self._frame_counter == 1:
+            return True
+        
+        # Check if this frame should be processed based on interval
+        should_process = (self._frame_counter % self.current_interval) == 0
+        
+        return should_process
+    
+    def update_adaptive_interval(self, detection_success):
+        """
+        Adjust detection interval based on recent success/failure
+        
+        Args:
+            detection_success: Whether detection succeeded
+        """
+        if not self.adaptive_interval:
+            return
+        
+        if detection_success:
+            self.consecutive_successes += 1
+            self.consecutive_failures = 0
+            
+            # If consistently detecting, can reduce interval (detect more frequently)
+            if self.consecutive_successes > 3 and self.current_interval > 1:
+                self.current_interval = max(1, self.current_interval - 1)
+        else:
+            self.consecutive_failures += 1
+            self.consecutive_successes = 0
+            
+            # If consistently failing, increase interval (detect less frequently)
+            if self.consecutive_failures > 3 and self.current_interval < self.max_interval:
+                self.current_interval = min(self.max_interval, self.current_interval + 1)
+    
+    def detect_and_estimate_pose(self, frame, force_detect=False):
+        """
+        Detect checkerboard and estimate pose with performance optimizations
         
         Args:
             frame: Input image (BGR)
+            force_detect: Force detection even if interval says to skip
             
         Returns:
-            Dictionary with pose data or None if detection failed
+            Dictionary with pose data or None if detection failed/skipped
         """
-        self._frame_counter += 1
-
+        # Check if we should skip detection this frame
+        if not force_detect and not self.should_detect_this_frame():
+            self.frames_since_detection += 1
+            # Return last known pose if available and recent
+            if self.last_pose is not None and self.frames_since_detection < 10:
+                return self.last_pose
+            return None
+        
+        # Convert to grayscale once
         gray_full = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-        # Optionally do detection on a downscaled image to reduce CPU cost
+        
+        # Downscale for faster detection
         gray = gray_full
         scale_inv = 1.0
         if self.detect_scale > 0 and self.detect_scale < 1.0:
-            gray = cv2.resize(gray_full, None, fx=self.detect_scale, fy=self.detect_scale, interpolation=cv2.INTER_AREA)
+            gray = cv2.resize(gray_full, None, 
+                            fx=self.detect_scale, 
+                            fy=self.detect_scale, 
+                            interpolation=cv2.INTER_AREA)
             scale_inv = 1.0 / self.detect_scale
-
-        # Respect detection interval (skip expensive detection on some frames)
-        if (self._frame_counter % self.detect_interval) != 0:
-            return None
-
-        # Find checkerboard corners on (possibly) scaled grayscale
-        ret, corners = cv2.findChessboardCorners(gray, self.checkerboard_size, None)
-
+        
+        # Find checkerboard corners on scaled image
+        # Use FAST_CHECK flag for faster detection (but less robust)
+        flags = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE
+        if self.consecutive_failures > 2:
+            # More thorough search when struggling
+            flags += cv2.CALIB_CB_FILTER_QUADS
+        else:
+            # Faster search when working well
+            flags += cv2.CALIB_CB_FAST_CHECK
+        
+        ret, corners = cv2.findChessboardCorners(gray, self.checkerboard_size, flags)
+        
+        # Update adaptive interval based on detection result
+        self.update_adaptive_interval(ret)
+        
         if not ret:
+            self.frames_since_detection += 1
             return None
-
-        # Scale corners back to full resolution if detection was done on scaled image
+        
+        # Detection succeeded - reset counter
+        self.frames_since_detection = 0
+        
+        # Scale corners back to full resolution if detection was on scaled image
         if scale_inv != 1.0:
             corners = corners * scale_inv
-
+        
         # Refine corner positions on full-resolution grayscale
         corners_refined = cv2.cornerSubPix(gray_full, corners, (11, 11), (-1, -1), 
                                           self.criteria)
@@ -109,13 +192,16 @@ class PoseEstimator:
         if len(self.pose_history) > self.max_history:
             self.pose_history.pop(0)
         
-        return {
+        # Cache this pose
+        self.last_pose = {
             'rotation_vector': rvec,
             'translation_vector': tvec,
             'rotation_matrix': rotation_matrix,
             'corners': corners_refined,
             'detected': True
         }
+        
+        return self.last_pose
     
     def get_pose_stability(self):
         """
@@ -145,33 +231,34 @@ class PoseEstimator:
             'sample_count': len(self.pose_history)
         }
     
-    def draw_axis(self, frame, rvec, tvec, length=0.05):
+    def get_performance_stats(self):
         """
-        Draw 3D coordinate axes on the frame
+        Get current performance statistics
         
-        Args:
-            frame: Input image
-            rvec: Rotation vector
-            tvec: Translation vector
-            length: Length of axes in meters
-            
         Returns:
-            Frame with axes drawn
+            Dictionary with performance metrics
         """
-        # Define 3D points for axes
+        return {
+            'current_interval': self.current_interval,
+            'consecutive_failures': self.consecutive_failures,
+            'consecutive_successes': self.consecutive_successes,
+            'frames_since_detection': self.frames_since_detection,
+            'has_cached_pose': self.last_pose is not None
+        }
+    
+    def draw_axis(self, frame, rvec, tvec, length=0.05):
+        """Draw 3D coordinate axes on the frame"""
         axis_points = np.float32([
-            [0, 0, 0],           # Origin
-            [length, 0, 0],      # X-axis
-            [0, length, 0],      # Y-axis
-            [0, 0, length]       # Z-axis
+            [0, 0, 0],
+            [length, 0, 0],
+            [0, length, 0],
+            [0, 0, -length]
         ])
         
-        # Project 3D points to image plane
         img_points, _ = cv2.projectPoints(axis_points, rvec, tvec, 
                                          self.camera_matrix, self.dist_coeffs)
         img_points = img_points.astype(int)
         
-        # Draw axes
         origin = tuple(img_points[0].ravel())
         frame = cv2.line(frame, origin, tuple(img_points[1].ravel()), 
                         (0, 0, 255), 3)  # X-axis (Red)
@@ -183,117 +270,33 @@ class PoseEstimator:
         return frame
     
     def draw_cube(self, frame, rvec, tvec, size=0.05):
-        """
-        Draw a 3D cube on the frame
-        
-        Args:
-            frame: Input image
-            rvec: Rotation vector
-            tvec: Translation vector
-            size: Size of cube in meters
-            
-        Returns:
-            Frame with cube drawn
-        """
-        # Define 3D points for cube vertices
+        """Draw a 3D cube on the frame"""
         cube_points = np.float32([
-            [0, 0, 0], [0, size, 0], [size, size, 0], [size, 0, 0],  # Bottom
-            [0, 0, size], [0, size, size], [size, size, size], [size, 0, size]  # Top
+            [0, 0, 0], [0, size, 0], [size, size, 0], [size, 0, 0],
+            [0, 0, size], [0, size, size], [size, size, size], [size, 0, size]
         ])
         
-        # Project 3D points to image plane
         img_points, _ = cv2.projectPoints(cube_points, rvec, tvec,
                                          self.camera_matrix, self.dist_coeffs)
         img_points = img_points.astype(int).reshape(-1, 2)
         
         # Draw cube edges
-        # Bottom face
         for i in range(4):
             pt1 = tuple(img_points[i])
             pt2 = tuple(img_points[(i + 1) % 4])
             frame = cv2.line(frame, pt1, pt2, (0, 255, 255), 2)
         
-        # Top face
         for i in range(4, 8):
             pt1 = tuple(img_points[i])
             pt2 = tuple(img_points[4 + (i + 1) % 4])
             frame = cv2.line(frame, pt1, pt2, (0, 255, 255), 2)
         
-        # Vertical edges
         for i in range(4):
             pt1 = tuple(img_points[i])
             pt2 = tuple(img_points[i + 4])
             frame = cv2.line(frame, pt1, pt2, (0, 255, 255), 2)
         
-        # Fill top face for better visibility
         pts = img_points[4:8].reshape((-1, 1, 2))
         frame = cv2.fillPoly(frame, [pts], (0, 200, 200))
         
         return frame
-
-
-def test_pose_estimation():
-    """Test pose estimation with live camera"""
-    from camera_calibration import CameraCalibrator
-    
-    # Load calibration data
-    calib_data = CameraCalibrator.load_calibration('calibration.pkl')
-    
-    if calib_data is None:
-        print("No calibration data found. Please run camera_calibration.py first")
-        return
-    
-    camera_matrix = calib_data['camera_matrix']
-    dist_coeffs = calib_data['distortion_coeffs']
-    
-    # Initialize pose estimator
-    estimator = PoseEstimator(camera_matrix, dist_coeffs)
-    
-    # Open camera
-    cap = cv2.VideoCapture(0)
-    
-    print("Press ESC to exit")
-    
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        
-        # Estimate pose
-        pose_data = estimator.detect_and_estimate_pose(frame)
-        
-        if pose_data:
-            # Draw coordinate axes
-            frame = estimator.draw_axis(frame, pose_data['rotation_vector'],
-                                       pose_data['translation_vector'])
-            
-            # Draw cube
-            frame = estimator.draw_cube(frame, pose_data['rotation_vector'],
-                                       pose_data['translation_vector'], size=0.05)
-            
-            # Display pose info
-            tvec = pose_data['translation_vector'].flatten()
-            cv2.putText(frame, f"Position: ({tvec[0]:.3f}, {tvec[1]:.3f}, {tvec[2]:.3f})m",
-                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-            
-            # Get stability metrics
-            stability = estimator.get_pose_stability()
-            if stability:
-                std = stability['translation_std']
-                cv2.putText(frame, f"Stability (std): ({std[0]:.4f}, {std[1]:.4f}, {std[2]:.4f})",
-                           (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        else:
-            cv2.putText(frame, "No checkerboard detected", 
-                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-        
-        cv2.imshow('Pose Estimation Test', frame)
-        
-        if cv2.waitKey(1) & 0xFF == 27:  # ESC
-            break
-    
-    cap.release()
-    cv2.destroyAllWindows()
-
-
-if __name__ == "__main__":
-    test_pose_estimation()

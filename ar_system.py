@@ -52,10 +52,7 @@ class ARSystem:
         
         # Rendering mode
         self.render_mode = 'cube'  # 'cube', 'pyramid', 'axes', or 'all'
-
-        # Growth animation state for overlays (0.0..1.0)
-        self.grow_value = 0.0
-        self.grow_step = 0.12  # amount to increase per processed frame
+        
         
     def process_frame(self, frame):
         """
@@ -76,21 +73,18 @@ class ARSystem:
             rvec = pose_data['rotation_vector']
             tvec = pose_data['translation_vector']
 
-            # Increase growth value up to 1.0 when we have a pose
-            self.grow_value = min(1.0, self.grow_value + self.grow_step)
-
-            # Render virtual objects based on mode using 'grow' variants
+            # Render virtual objects based on mode (static on top of checkerboard)
             if self.render_mode in ['cube', 'all']:
-                frame = self.renderer.render_cube_opencv_grow(frame, rvec, tvec, size=0.05, grow=self.grow_value)
+                frame = self.renderer.render_cube_opencv(frame, rvec, tvec, size=0.05)
 
             if self.render_mode in ['pyramid', 'all']:
                 # Offset pyramid slightly
                 tvec_offset = tvec.copy()
                 tvec_offset[0] += 0.06
-                frame = self.renderer.render_pyramid_opencv_grow(frame, rvec, tvec_offset, size=0.04, grow=self.grow_value)
+                frame = self.renderer.render_pyramid_opencv(frame, rvec, tvec_offset, size=0.04)
 
             if self.render_mode in ['axes', 'all']:
-                frame = self.renderer.render_axes_grow(frame, rvec, tvec, length=0.05, grow=self.grow_value)
+                frame = self.renderer.render_axes(frame, rvec, tvec, length=0.05)
 
             # Display pose information
             t = tvec.flatten()
@@ -104,8 +98,6 @@ class ARSystem:
                 cv2.putText(frame, f"Stability (mm): ({std[0]*1000:.2f}, {std[1]*1000:.2f}, {std[2]*1000:.2f})",
                            (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         else:
-            # Reset growth when no checkerboard detected so overlays grow anew when detected
-            self.grow_value = 0.0
             cv2.putText(frame, "No checkerboard detected", 
                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         
@@ -172,12 +164,68 @@ class ARSystem:
         
         frame_idx = 0
         last_processed_frame = None
+        # Reconnection policy when camera read fails
+        recon_max_attempts = 5
+        recon_delay = 1.0  # seconds between reconnect attempts
 
         while True:
-            ret, frame = cap.read()
+            try:
+                ret, frame = cap.read()
+            except Exception as e:
+                # Some capture wrappers may raise on disconnect
+                print(f"Camera read error: {e}")
+                ret = False
+
             if not ret:
-                print("Failed to read frame")
-                break
+                print("Warning: Failed to read frame. Attempting to reconnect...")
+
+                # If we have a last processed frame, keep showing it while we retry
+                reconnected = False
+                for attempt in range(1, recon_max_attempts + 1):
+                    print(f" Reconnect attempt {attempt}/{recon_max_attempts}...")
+                    try:
+                        # Release and re-open depending on camera type
+                        if use_android:
+                            try:
+                                cap.release()
+                            except Exception:
+                                pass
+                            cap = get_android_camera(android_method, **(android_kwargs or {}))
+                            if cap.open():
+                                # try a single read
+                                try:
+                                    ok, frame = cap.read()
+                                except Exception:
+                                    ok = False
+                                if ok:
+                                    reconnected = True
+                                    ret = True
+                                    print(" Reconnected to Android camera")
+                                    break
+                        else:
+                            try:
+                                cap.release()
+                            except Exception:
+                                pass
+                            cap = cv2.VideoCapture(camera_id)
+                            if cap.isOpened():
+                                try:
+                                    ok, frame = cap.read()
+                                except Exception:
+                                    ok = False
+                                if ok:
+                                    reconnected = True
+                                    ret = True
+                                    print(" Reconnected to local camera")
+                                    break
+                    except Exception as e:
+                        print(f"  Reconnect attempt failed: {e}")
+
+                    time.sleep(recon_delay)
+
+                if not reconnected:
+                    print("Error: Could not reconnect after several attempts. Exiting.")
+                    break
 
             frame_idx += 1
 
@@ -297,6 +345,10 @@ def main():
                        help='Checkerboard height (inner corners)')
     parser.add_argument('--square-size', type=float, default=0.020,
                        help='Checkerboard square size in meters')
+    parser.add_argument('--detect-scale', type=float, default=0.5,
+                   help='Detection scale factor (0.3-1.0, lower=faster)')
+    parser.add_argument('--detect-interval', type=int, default=2,
+                   help='Detect every Nth frame when not detecting')
     
     # Android camera options
     parser.add_argument('--android', dest='android_method', 

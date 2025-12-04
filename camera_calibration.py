@@ -55,44 +55,121 @@ class CameraCalibrator:
         
         print(f"Capturing {num_images} calibration images...")
         print("Press SPACE to capture image, ESC to cancel, ENTER when done")
+
+        # Prepare display window and screen metrics for portrait fit
+        try:
+            import ctypes
+            screen_w = ctypes.windll.user32.GetSystemMetrics(0)
+            screen_h = ctypes.windll.user32.GetSystemMetrics(1)
+        except Exception:
+            screen_w, screen_h = 1920, 1080
+        display_margin = max(120, int(screen_h * 0.06))
+        cv2.namedWindow('Calibration', cv2.WINDOW_NORMAL)
         
         count = 0
+        frame_counter = 0
+        # Keep last successful detection to avoid flashing on skipped frames
+        last_found = False
+        last_corners = None
+        frames_since_detection = 0
+        # Detection tuning: allow callers to set attributes `detect_scale` and `detect_interval`
+        detect_scale = getattr(self, 'detect_scale', 1.0)
+        detect_interval = max(1, int(getattr(self, 'detect_interval', 1)))
+
         while count < num_images:
             ret, frame = cap.read()
             if not ret:
                 continue
-            
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            
-            # Find checkerboard corners
-            ret, corners = cv2.findChessboardCorners(gray, self.checkerboard_size, None)
+
+            frame_counter += 1
+            gray_full = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            # Optionally downscale for faster detection
+            gray = gray_full
+            scale_inv = 1.0
+            if detect_scale > 0 and detect_scale < 1.0:
+                gray = cv2.resize(gray_full, None, fx=detect_scale, fy=detect_scale, interpolation=cv2.INTER_AREA)
+                scale_inv = 1.0 / detect_scale
+
+            # Run detection only on selected frames to reduce load
+            if (frame_counter % detect_interval) != 0:
+                # Skip actual detection this frame
+                found = False
+                corners = None
+            else:
+                # Find checkerboard corners on (possibly) scaled image
+                found, corners = cv2.findChessboardCorners(gray, self.checkerboard_size, None)
+                if found and scale_inv != 1.0:
+                    # Scale corner coordinates back to full resolution
+                    corners = corners * scale_inv
+
+            # Update last detection cache
+            if found:
+                last_found = True
+                last_corners = corners
+                frames_since_detection = 0
+            else:
+                frames_since_detection += 1
             
             display_frame = frame.copy()
-            if ret:
-                cv2.drawChessboardCorners(display_frame, self.checkerboard_size, 
-                                         corners, ret)
+            # If detection skipped but we have a recent cached detection, show it to avoid flashing
+            if found:
+                cv2.drawChessboardCorners(display_frame, self.checkerboard_size, corners, found)
                 cv2.putText(display_frame, f"Corners found! Press SPACE to capture ({count}/{num_images})",
                            (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            elif last_found and frames_since_detection < max(1, detect_interval * 3):
+                # show cached corners
+                try:
+                    cv2.drawChessboardCorners(display_frame, self.checkerboard_size, last_corners, True)
+                    cv2.putText(display_frame, f"Using last detection ({count}/{num_images})",
+                               (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 0), 2)
+                except Exception:
+                    cv2.putText(display_frame, "No corners detected",
+                               (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             else:
-                cv2.putText(display_frame, "No corners detected", 
+                cv2.putText(display_frame, "No corners detected",
                            (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             
+            # Rotate and scale display_frame for portrait preview that fits the screen height
+            try:
+                h, w = display_frame.shape[:2]
+                if w > h:
+                    display_frame = cv2.rotate(display_frame, cv2.ROTATE_90_CLOCKWISE)
+                    h, w = display_frame.shape[:2]
+
+                max_h = max(100, screen_h - display_margin)
+                max_w = max(100, screen_w - int(display_margin * 0.5))
+                scale = min(1.0, float(max_w) / float(w), float(max_h) / float(h))
+                if scale < 1.0:
+                    new_w = int(w * scale)
+                    new_h = int(h * scale)
+                    display_frame = cv2.resize(display_frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                    cv2.resizeWindow('Calibration', new_w, new_h)
+                else:
+                    cv2.resizeWindow('Calibration', w, h)
+
+            except Exception:
+                pass
+
             cv2.imshow('Calibration', display_frame)
             
             key = cv2.waitKey(1) & 0xFF
             
             if key == 27:  # ESC
                 break
-            elif key == 32 and ret:  # SPACE
-                # Refine corner positions
-                corners_refined = cv2.cornerSubPix(
-                    gray, corners, (11, 11), (-1, -1),
-                    (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-                )
-                self.obj_points.append(self.objp)
-                self.img_points.append(corners_refined)
-                count += 1
-                print(f"Image {count} captured")
+            elif key == 32 and (found or (last_found and frames_since_detection < max(1, detect_interval * 3))):  # SPACE
+                # Use current corners if available, otherwise use cached
+                use_corners = corners if found else last_corners
+                if use_corners is not None:
+                    # Refine corner positions on full-resolution grayscale
+                    corners_refined = cv2.cornerSubPix(
+                        gray_full, use_corners, (11, 11), (-1, -1),
+                        (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+                    )
+                    self.obj_points.append(self.objp)
+                    self.img_points.append(corners_refined)
+                    count += 1
+                    print(f"Image {count} captured")
             elif key == 13:  # ENTER
                 break
         
@@ -160,6 +237,10 @@ def main():
                        help='RTSP stream URL')
     parser.add_argument('--num-images', type=int, default=15,
                        help='Number of calibration images to capture')
+    parser.add_argument('--detect-scale', type=float, default=0.5,
+                    help='Detection scale factor (0.3-1.0, lower=faster)')
+    parser.add_argument('--detect-interval', type=int, default=2,
+                    help='Detect every Nth frame when not detecting')
     
     args = parser.parse_args()
     
@@ -182,6 +263,10 @@ def main():
     calibrator = CameraCalibrator()
     
     # Capture images
+    # Supply detection tuning values to the calibrator instance so capture uses them
+    setattr(calibrator, 'detect_scale', args.detect_scale)
+    setattr(calibrator, 'detect_interval', args.detect_interval)
+
     if not calibrator.capture_calibration_images(num_images=args.num_images, cap=cap):
         print("Calibration cancelled or failed")
         if cap:
