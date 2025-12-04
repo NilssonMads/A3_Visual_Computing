@@ -6,11 +6,8 @@ Renders 3D objects using OpenGL based on pose estimation
 
 import cv2
 import numpy as np
-from OpenGL.GL import *
-from OpenGL.GLU import *
-from OpenGL.GLUT import *
+from OpenGL import GL
 import pygame
-from pygame.locals import *
 
 
 class ARRenderer:
@@ -37,7 +34,7 @@ class ARRenderer:
         
         # Initialize Pygame and OpenGL
         pygame.init()
-        self.display = pygame.display.set_mode((width, height), DOUBLEBUF | OPENGL)
+        self.display = pygame.display.set_mode((width, height), pygame.DOUBLEBUF | pygame.OPENGL)
         pygame.display.set_caption("AR Renderer")
         
         # Setup OpenGL
@@ -45,21 +42,21 @@ class ARRenderer:
         
     def _setup_opengl(self):
         """Setup OpenGL parameters"""
-        glEnable(GL_DEPTH_TEST)
-        glEnable(GL_LIGHTING)
-        glEnable(GL_LIGHT0)
-        glEnable(GL_COLOR_MATERIAL)
-        glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
-        
+        GL.glEnable(GL.GL_DEPTH_TEST)
+        GL.glEnable(GL.GL_LIGHTING)
+        GL.glEnable(GL.GL_LIGHT0)
+        GL.glEnable(GL.GL_COLOR_MATERIAL)
+        GL.glColorMaterial(GL.GL_FRONT_AND_BACK, GL.GL_AMBIENT_AND_DIFFUSE)
+
         # Light setup
-        glLight(GL_LIGHT0, GL_POSITION, (1, 1, 1, 0))
-        glLight(GL_LIGHT0, GL_AMBIENT, (0.3, 0.3, 0.3, 1))
-        glLight(GL_LIGHT0, GL_DIFFUSE, (0.7, 0.7, 0.7, 1))
+        GL.glLightfv(GL.GL_LIGHT0, GL.GL_POSITION, (1, 1, 1, 0))
+        GL.glLightfv(GL.GL_LIGHT0, GL.GL_AMBIENT, (0.3, 0.3, 0.3, 1))
+        GL.glLightfv(GL.GL_LIGHT0, GL.GL_DIFFUSE, (0.7, 0.7, 0.7, 1))
         
     def set_projection_from_camera(self):
         """Set OpenGL projection matrix from camera intrinsics"""
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
+        GL.glMatrixMode(GL.GL_PROJECTION)
+        GL.glLoadIdentity()
         
         # Extract camera parameters
         fx = self.camera_matrix[0, 0]
@@ -77,7 +74,7 @@ class ARRenderer:
         projection[2, 3] = -2.0 * self.FAR_CLIP * self.NEAR_CLIP / (self.FAR_CLIP - self.NEAR_CLIP)
         projection[3, 2] = -1.0
         
-        glLoadMatrixf(projection.T)
+        GL.glLoadMatrixf(projection.T)
         
     def set_modelview_from_pose(self, rvec, tvec):
         """
@@ -87,8 +84,8 @@ class ARRenderer:
             rvec: Rotation vector
             tvec: Translation vector
         """
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
+        GL.glMatrixMode(GL.GL_MODELVIEW)
+        GL.glLoadIdentity()
         
         # Convert rotation vector to rotation matrix
         R, _ = cv2.Rodrigues(rvec)
@@ -102,7 +99,7 @@ class ARRenderer:
         # We need to transpose and invert for proper camera pose
         view_matrix = np.linalg.inv(transformation)
         
-        glLoadMatrixf(view_matrix.T)
+        GL.glLoadMatrixf(view_matrix.T)
         
     def draw_cube(self, size=0.05, wireframe=False):
         """
@@ -136,16 +133,16 @@ class ARRenderer:
         ]
         
         if wireframe:
-            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+            GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_LINE)
         else:
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
-        
-        glBegin(GL_QUADS)
+            GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_FILL)
+
+        GL.glBegin(GL.GL_QUADS)
         for i, face in enumerate(faces):
-            glColor3fv(colors[i])
+            GL.glColor3fv(colors[i])
             for vertex_idx in face:
-                glVertex3fv(vertices[vertex_idx])
-        glEnd()
+                GL.glVertex3fv(vertices[vertex_idx])
+        GL.glEnd()
         
     def draw_pyramid(self, size=0.05):
         """Draw a 3D pyramid"""
@@ -157,63 +154,63 @@ class ARRenderer:
             [size/2, size/2, -size]  # Apex (toward camera)
         ]
         
-        glBegin(GL_TRIANGLES)
+        GL.glBegin(GL.GL_TRIANGLES)
         
         # Bottom face
-        glColor3f(0.5, 0.5, 0.5)
-        glVertex3fv(vertices[0])
-        glVertex3fv(vertices[1])
-        glVertex3fv(vertices[2])
-        
-        glVertex3fv(vertices[0])
-        glVertex3fv(vertices[2])
-        glVertex3fv(vertices[3])
-        
+        GL.glColor3f(0.5, 0.5, 0.5)
+        GL.glVertex3fv(vertices[0])
+        GL.glVertex3fv(vertices[1])
+        GL.glVertex3fv(vertices[2])
+
+        GL.glVertex3fv(vertices[0])
+        GL.glVertex3fv(vertices[2])
+        GL.glVertex3fv(vertices[3])
+
         # Side faces
-        glColor3f(1, 0, 0)
-        glVertex3fv(vertices[0])
-        glVertex3fv(vertices[1])
-        glVertex3fv(vertices[4])
-        
-        glColor3f(0, 1, 0)
-        glVertex3fv(vertices[1])
-        glVertex3fv(vertices[2])
-        glVertex3fv(vertices[4])
-        
-        glColor3f(0, 0, 1)
-        glVertex3fv(vertices[2])
-        glVertex3fv(vertices[3])
-        glVertex3fv(vertices[4])
-        
-        glColor3f(1, 1, 0)
-        glVertex3fv(vertices[3])
-        glVertex3fv(vertices[0])
-        glVertex3fv(vertices[4])
-        
-        glEnd()
+        GL.glColor3f(1, 0, 0)
+        GL.glVertex3fv(vertices[0])
+        GL.glVertex3fv(vertices[1])
+        GL.glVertex3fv(vertices[4])
+
+        GL.glColor3f(0, 1, 0)
+        GL.glVertex3fv(vertices[1])
+        GL.glVertex3fv(vertices[2])
+        GL.glVertex3fv(vertices[4])
+
+        GL.glColor3f(0, 0, 1)
+        GL.glVertex3fv(vertices[2])
+        GL.glVertex3fv(vertices[3])
+        GL.glVertex3fv(vertices[4])
+
+        GL.glColor3f(1, 1, 0)
+        GL.glVertex3fv(vertices[3])
+        GL.glVertex3fv(vertices[0])
+        GL.glVertex3fv(vertices[4])
+
+        GL.glEnd()
         
     def draw_coordinate_frame(self, length=0.05):
         """Draw 3D coordinate frame (axes)"""
-        glLineWidth(3.0)
-        glBegin(GL_LINES)
+        GL.glLineWidth(3.0)
+        GL.glBegin(GL.GL_LINES)
         
         # X-axis (Red)
-        glColor3f(1, 0, 0)
-        glVertex3f(0, 0, 0)
-        glVertex3f(length, 0, 0)
+        GL.glColor3f(1, 0, 0)
+        GL.glVertex3f(0, 0, 0)
+        GL.glVertex3f(length, 0, 0)
         
         # Y-axis (Green)
-        glColor3f(0, 1, 0)
-        glVertex3f(0, 0, 0)
-        glVertex3f(0, length, 0)
+        GL.glColor3f(0, 1, 0)
+        GL.glVertex3f(0, 0, 0)
+        GL.glVertex3f(0, length, 0)
         
         # Z-axis (Blue) - point toward camera (negative Z)
-        glColor3f(0, 0, 1)
-        glVertex3f(0, 0, 0)
-        glVertex3f(0, 0, -length)
-        
-        glEnd()
-        glLineWidth(1.0)
+        GL.glColor3f(0, 0, 1)
+        GL.glVertex3f(0, 0, 0)
+        GL.glVertex3f(0, 0, -length)
+
+        GL.glEnd()
+        GL.glLineWidth(1.0)
         
     def render_background(self, frame):
         """
@@ -227,31 +224,31 @@ class ARRenderer:
         frame_rgb = cv2.flip(frame_rgb, 0)  # Flip vertically for OpenGL
         
         # Disable depth test for background
-        glDisable(GL_DEPTH_TEST)
+        GL.glDisable(GL.GL_DEPTH_TEST)
         
         # Draw background as textured quad
-        glMatrixMode(GL_PROJECTION)
-        glPushMatrix()
-        glLoadIdentity()
-        glOrtho(0, self.width, 0, self.height, -1, 1)
-        
-        glMatrixMode(GL_MODELVIEW)
-        glPushMatrix()
-        glLoadIdentity()
+        GL.glMatrixMode(GL.GL_PROJECTION)
+        GL.glPushMatrix()
+        GL.glLoadIdentity()
+        GL.glOrtho(0, self.width, 0, self.height, -1, 1)
+
+        GL.glMatrixMode(GL.GL_MODELVIEW)
+        GL.glPushMatrix()
+        GL.glLoadIdentity()
         
         # Create texture from frame
-        glRasterPos2i(0, 0)
-        glDrawPixels(self.width, self.height, GL_RGB, GL_UNSIGNED_BYTE, frame_rgb)
-        
-        glPopMatrix()
-        glMatrixMode(GL_PROJECTION)
-        glPopMatrix()
-        
-        glEnable(GL_DEPTH_TEST)
+        GL.glRasterPos2i(0, 0)
+        GL.glDrawPixels(self.width, self.height, GL.GL_RGB, GL.GL_UNSIGNED_BYTE, frame_rgb)
+
+        GL.glPopMatrix()
+        GL.glMatrixMode(GL.GL_PROJECTION)
+        GL.glPopMatrix()
+
+        GL.glEnable(GL.GL_DEPTH_TEST)
         
     def clear(self):
         """Clear buffers"""
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
         
     def swap_buffers(self):
         """Swap display buffers"""

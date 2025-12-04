@@ -9,7 +9,6 @@ import numpy as np
 import pickle
 import os
 import argparse
-from pathlib import Path
 
 
 class CameraCalibrator:

@@ -5,13 +5,7 @@ Supports multiple methods to stream video from Android phone to computer
 """
 
 import cv2
-import numpy as np
-import socket
-import struct
-import pickle
-import subprocess
 import time
-import os
 
 import threading
 
