@@ -11,8 +11,6 @@ Use your Android phone as a wireless camera for the AR system. This provides bet
 | Method | Difficulty | Quality | Connection | Best For |
 |--------|-----------|---------|------------|----------|
 | IP Webcam | ⭐ Easy | Good | WiFi | Quick setup |
-| DroidCam | ⭐⭐ Medium | Excellent | WiFi/USB | Best quality |
-| RTSP | ⭐⭐⭐ Advanced | Good | WiFi | Custom setups |
 
 ### 2. IP Webcam Setup (Recommended)
 
@@ -34,51 +32,7 @@ python camera_calibration.py --android ipwebcam --url http://192.168.1.100:8080
 python ar_system.py --android ipwebcam --url http://192.168.1.100:8080
 ```
 
-### 3. DroidCam Setup
-
-**On your Android phone:**
-1. Install "DroidCam" from Google Play Store
-2. Open the app
-3. Note the WiFi IP or connect via USB
-
-**On your computer:**
-1. Download and install DroidCam Client
-   - Linux: https://www.dev47apps.com/droidcam/linux/
-   - Windows: https://www.dev47apps.com/droidcam/windows/
-2. Launch DroidCam Client
-3. Connect to your phone (WiFi or USB)
-4. DroidCam will create a virtual camera device
-
-**Usage:**
-```bash
-# Test connection (device ID usually 1 or 2)
-python android_camera.py --method droidcam --device-id 1
-
-# Calibrate camera
-python camera_calibration.py --android droidcam --device-id 1
-
-# Run AR system
-python ar_system.py --android droidcam --device-id 1
-```
-
-### 4. RTSP Setup
-
-**On your Android phone:**
-1. Install an RTSP server app (e.g., "RTSP Camera Server")
-2. Start the server
-3. Note the RTSP URL (e.g., `rtsp://192.168.1.100:8554/live`)
-
-**Usage:**
-```bash
-# Test connection
-python android_camera.py --method rtsp --rtsp-url rtsp://192.168.1.100:8554/live
-
-# Calibrate camera
-python camera_calibration.py --android rtsp --rtsp-url rtsp://192.168.1.100:8554/live
-
-# Run AR system
-python ar_system.py --android rtsp --rtsp-url rtsp://192.168.1.100:8554/live
-```
+<!-- DroidCam and RTSP sections removed - IP Webcam is the supported and recommended method -->
 
 ## Common Commands
 

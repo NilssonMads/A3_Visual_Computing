@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 import time
 import argparse
+import ctypes
 from camera_calibration import CameraCalibrator
 from pose_estimation import PoseEstimator
 from ar_renderer import SimpleARRenderer
@@ -18,7 +19,7 @@ class ARSystem:
     """Main AR System integrating detection, tracking, and rendering"""
     
     def __init__(self, calibration_file='calibration.pkl', 
-                 checkerboard_size=(9, 6), square_size=0.025):
+                 checkerboard_size=(7, 9), square_size=0.020):
         """
         Initialize AR system
         
@@ -51,6 +52,10 @@ class ARSystem:
         
         # Rendering mode
         self.render_mode = 'cube'  # 'cube', 'pyramid', 'axes', or 'all'
+
+        # Growth animation state for overlays (0.0..1.0)
+        self.grow_value = 0.0
+        self.grow_step = 0.12  # amount to increase per processed frame
         
     def process_frame(self, frame):
         """
@@ -64,31 +69,34 @@ class ARSystem:
         """
         start_time = time.time()
         
-        # Detect and estimate pose
+        # Detect and estimate pose (pose estimator may skip detection internally)
         pose_data = self.pose_estimator.detect_and_estimate_pose(frame)
-        
+
         if pose_data:
             rvec = pose_data['rotation_vector']
             tvec = pose_data['translation_vector']
-            
-            # Render virtual objects based on mode
+
+            # Increase growth value up to 1.0 when we have a pose
+            self.grow_value = min(1.0, self.grow_value + self.grow_step)
+
+            # Render virtual objects based on mode using 'grow' variants
             if self.render_mode in ['cube', 'all']:
-                frame = self.renderer.render_cube_opencv(frame, rvec, tvec, size=0.05)
-            
+                frame = self.renderer.render_cube_opencv_grow(frame, rvec, tvec, size=0.05, grow=self.grow_value)
+
             if self.render_mode in ['pyramid', 'all']:
                 # Offset pyramid slightly
                 tvec_offset = tvec.copy()
                 tvec_offset[0] += 0.06
-                frame = self.renderer.render_pyramid_opencv(frame, rvec, tvec_offset, size=0.04)
-            
+                frame = self.renderer.render_pyramid_opencv_grow(frame, rvec, tvec_offset, size=0.04, grow=self.grow_value)
+
             if self.render_mode in ['axes', 'all']:
-                frame = self.renderer.render_axes(frame, rvec, tvec, length=0.05)
-            
+                frame = self.renderer.render_axes_grow(frame, rvec, tvec, length=0.05, grow=self.grow_value)
+
             # Display pose information
             t = tvec.flatten()
             cv2.putText(frame, f"Position: ({t[0]:.3f}, {t[1]:.3f}, {t[2]:.3f})m",
                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-            
+
             # Display stability metrics
             stability = self.pose_estimator.get_pose_stability()
             if stability:
@@ -96,6 +104,8 @@ class ARSystem:
                 cv2.putText(frame, f"Stability (mm): ({std[0]*1000:.2f}, {std[1]*1000:.2f}, {std[2]*1000:.2f})",
                            (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         else:
+            # Reset growth when no checkerboard detected so overlays grow anew when detected
+            self.grow_value = 0.0
             cv2.putText(frame, "No checkerboard detected", 
                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         
@@ -122,7 +132,7 @@ class ARSystem:
         
         return frame
     
-    def run(self, camera_id=0, use_android=False, android_method='ipwebcam', android_kwargs=None):
+    def run(self, camera_id=0, use_android=False, android_method='ipwebcam', android_kwargs=None, frame_skip=1):
         """
         Run AR system
         
@@ -160,21 +170,75 @@ class ARSystem:
         print("  ESC - Exit")
         print()
         
+        frame_idx = 0
+        last_processed_frame = None
+
         while True:
             ret, frame = cap.read()
             if not ret:
                 print("Failed to read frame")
                 break
-            
-            # Process frame
-            frame = self.process_frame(frame)
-            
-            # Display
-            cv2.imshow('AR System', frame)
-            
+
+            frame_idx += 1
+
+            # Decide whether to process this frame or reuse last processed result
+            do_process = (frame_idx % max(1, frame_skip) == 0)
+
+            if do_process or last_processed_frame is None:
+                # Run the full processing pipeline on this frame
+                last_processed_frame = self.process_frame(frame)
+
+            # Display (scale to fit screen in portrait mode without altering processing)
+            # Create a resizable window once
+            try:
+                if not hasattr(self, '_display_window_created') or not self._display_window_created:
+                    cv2.namedWindow('AR System', cv2.WINDOW_NORMAL)
+                    # Get screen size (Windows)
+                    try:
+                        screen_w = ctypes.windll.user32.GetSystemMetrics(0)
+                        screen_h = ctypes.windll.user32.GetSystemMetrics(1)
+                    except Exception:
+                        # Fallback to typical 1080p
+                        screen_w, screen_h = 1920, 1080
+
+                    # Reserve small margin for taskbar and borders
+                    self._display_screen_w = screen_w
+                    self._display_screen_h = screen_h
+                    self._display_margin = 100
+                    self._display_window_created = True
+
+                display_frame = last_processed_frame.copy() if last_processed_frame is not None else frame.copy()
+
+                h, w = display_frame.shape[:2]
+
+                # If frame is landscape, rotate it for portrait display (only for showing)
+                rotated_for_display = False
+                if w > h:
+                    display_frame = cv2.rotate(display_frame, cv2.ROTATE_90_CLOCKWISE)
+                    rotated_for_display = True
+                    h, w = display_frame.shape[:2]
+
+                # Compute scale to fit within screen while preserving aspect ratio
+                max_w = max(100, self._display_screen_w - self._display_margin)
+                max_h = max(100, self._display_screen_h - self._display_margin)
+                scale = min(1.0, float(max_w) / float(w), float(max_h) / float(h))
+
+                if scale < 1.0:
+                    new_w = int(w * scale)
+                    new_h = int(h * scale)
+                    display_frame = cv2.resize(display_frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                    cv2.resizeWindow('AR System', new_w, new_h)
+                else:
+                    cv2.resizeWindow('AR System', w, h)
+
+                cv2.imshow('AR System', display_frame)
+            except Exception:
+                # If anything goes wrong with display scaling, fall back
+                cv2.imshow('AR System', last_processed_frame if last_processed_frame is not None else frame)
+
             # Handle keyboard input
             key = cv2.waitKey(1) & 0xFF
-            
+
             if key == 27:  # ESC
                 break
             elif key == ord('1'):
@@ -227,23 +291,31 @@ def main():
                        help='Path to calibration file')
     parser.add_argument('--camera', type=int, default=0,
                        help='Camera device ID (for local camera)')
-    parser.add_argument('--checkerboard-width', type=int, default=9,
+    parser.add_argument('--checkerboard-width', type=int, default=7,
                        help='Checkerboard width (inner corners)')
-    parser.add_argument('--checkerboard-height', type=int, default=6,
+    parser.add_argument('--checkerboard-height', type=int, default=9,
                        help='Checkerboard height (inner corners)')
-    parser.add_argument('--square-size', type=float, default=0.025,
+    parser.add_argument('--square-size', type=float, default=0.020,
                        help='Checkerboard square size in meters')
     
     # Android camera options
     parser.add_argument('--android', dest='android_method', 
-                       choices=['ipwebcam', 'droidcam', 'rtsp'],
-                       help='Use Android phone camera with specified method')
+                       choices=['ipwebcam'],
+                       help='Use Android phone camera (IP Webcam)')
     parser.add_argument('--url', default='http://192.168.1.100:8080',
                        help='IP Webcam URL (for --android ipwebcam)')
     parser.add_argument('--device-id', type=int, default=1,
                        help='DroidCam device ID (for --android droidcam)')
     parser.add_argument('--rtsp-url', default='rtsp://192.168.1.100:8554/live',
                        help='RTSP stream URL (for --android rtsp)')
+    parser.add_argument('--android-threaded', action='store_true',
+                        help='Use threaded reader for Android camera to reduce latency')
+    parser.add_argument('--android-max-fps', type=float, default=0,
+                        help='Limit max read FPS for threaded reader (0 = unlimited)')
+    parser.add_argument('--android-max-width', type=int, default=0,
+                        help='Resize frames to this max width (0 = no resize)')
+    parser.add_argument('--frame-skip', type=int, default=1,
+                        help='Process only every Nth frame (1 = every frame, 2 = every other frame)')
     
     args = parser.parse_args()
     
@@ -259,18 +331,21 @@ def main():
         android_kwargs = {}
         
         if use_android:
-            if args.android_method == 'ipwebcam':
-                android_kwargs['url'] = args.url
-            elif args.android_method == 'droidcam':
-                android_kwargs['device_id'] = args.device_id
-            elif args.android_method == 'rtsp':
-                android_kwargs['rtsp_url'] = args.rtsp_url
+            # Only IP Webcam supported
+            android_kwargs['url'] = args.url
+            android_kwargs['threaded'] = args.android_threaded
+            if args.android_max_fps > 0:
+                android_kwargs['max_fps'] = args.android_max_fps
+            if args.android_max_width > 0:
+                android_kwargs['max_width'] = args.android_max_width
         
         ar_system.run(
             camera_id=args.camera,
             use_android=use_android,
             android_method=args.android_method or 'ipwebcam',
             android_kwargs=android_kwargs
+            ,
+            frame_skip=args.frame_skip
         )
         
     except Exception as e:

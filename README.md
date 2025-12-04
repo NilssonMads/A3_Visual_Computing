@@ -11,8 +11,6 @@ This project implements a minimal augmented reality (AR) system using a checkerb
 - **Camera Calibration**: Automated camera calibration using checkerboard patterns
 - **Android Phone Camera Support**: Use your Android phone as a wireless camera
   - IP Webcam method (recommended)
-  - DroidCam integration
-  - RTSP streaming support
 - **Pose Estimation**: Real-time camera pose estimation relative to the checkerboard
 - **3D Rendering**: Multiple rendering modes including:
   - 3D Cube
@@ -29,7 +27,7 @@ This project implements a minimal augmented reality (AR) system using a checkerb
 
 - Python 3.8 or higher
 - Webcam, USB camera, **or Android phone with camera**
-- Printed checkerboard pattern (9x6 inner corners, 25mm squares recommended)
+- Printed checkerboard pattern (7x9 inner corners, 20mm squares recommended)
 
 ### Python Dependencies
 
@@ -54,7 +52,7 @@ Required packages:
 You can generate a checkerboard pattern using:
 - Online generators (search "checkerboard pattern generator")
 - OpenCV calibration patterns
-- Default: 9x6 inner corners, 25mm square size
+- Default: 7x9 inner corners, 20mm square size
 
 **Important**: The pattern should be flat and printed on rigid material for best results.
 
@@ -296,7 +294,7 @@ This AR system is ideal for:
 
 ### Checkerboard Not Detected
 - Ensure good lighting without glare
-- Check that checkerboard pattern is correct (9x6 inner corners)
+ - Check that checkerboard pattern is correct (7x9 inner corners)
 - Make sure pattern is flat and not warped
 - Try different distances from camera
 
@@ -323,9 +321,9 @@ python ar_system.py --help
 Options:
 - `--calibration`: Path to calibration file (default: calibration.pkl)
 - `--camera`: Camera device ID (default: 0)
-- `--checkerboard-width`: Number of inner corners in width (default: 9)
-- `--checkerboard-height`: Number of inner corners in height (default: 6)
-- `--square-size`: Size of checkerboard squares in meters (default: 0.025)
+- `--checkerboard-width`: Number of inner corners in width (default: 7)
+- `--checkerboard-height`: Number of inner corners in height (default: 9)
+- `--square-size`: Size of checkerboard squares in meters (default: 0.020)
 
 Example:
 ```bash
@@ -335,8 +333,8 @@ python ar_system.py --camera 1 --checkerboard-width 7 --checkerboard-height 5
 # Android phone with IP Webcam
 python ar_system.py --android ipwebcam --url http://192.168.1.105:8080
 
-# Android phone with DroidCam and custom checkerboard
-python ar_system.py --android droidcam --device-id 1 --square-size 0.03
+# Android phone with IP Webcam
+python ar_system.py --android ipwebcam --url http://192.168.1.105:8080
 ```
 
 ## References

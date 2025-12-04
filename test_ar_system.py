@@ -20,10 +20,10 @@ class TestCameraCalibration(unittest.TestCase):
         """Test CameraCalibrator initialization"""
         from camera_calibration import CameraCalibrator
         
-        calibrator = CameraCalibrator(checkerboard_size=(9, 6), square_size=0.025)
-        self.assertEqual(calibrator.checkerboard_size, (9, 6))
-        self.assertEqual(calibrator.square_size, 0.025)
-        self.assertEqual(calibrator.objp.shape, (54, 3))
+        calibrator = CameraCalibrator(checkerboard_size=(7, 9), square_size=0.020)
+        self.assertEqual(calibrator.checkerboard_size, (7, 9))
+        self.assertEqual(calibrator.square_size, 0.020)
+        self.assertEqual(calibrator.objp.shape, (63, 3))
     
     def test_calibration_save_load(self):
         """Test saving and loading calibration data"""
@@ -76,12 +76,12 @@ class TestPoseEstimation(unittest.TestCase):
         estimator = PoseEstimator(
             self.camera_matrix, 
             self.dist_coeffs,
-            checkerboard_size=(9, 6),
-            square_size=0.025
+            checkerboard_size=(7, 9),
+            square_size=0.020
         )
-        
-        self.assertEqual(estimator.checkerboard_size, (9, 6))
-        self.assertEqual(estimator.square_size, 0.025)
+
+        self.assertEqual(estimator.checkerboard_size, (7, 9))
+        self.assertEqual(estimator.square_size, 0.020)
         self.assertTrue(np.allclose(estimator.camera_matrix, self.camera_matrix))
     
     def test_pose_stability_empty(self):
@@ -192,7 +192,7 @@ class TestCheckerboardGenerator(unittest.TestCase):
         """Test checkerboard generation"""
         from generate_checkerboard import generate_checkerboard
         
-        img = generate_checkerboard(width=9, height=6, square_size_mm=25, dpi=300)
+        img = generate_checkerboard(width=7, height=9, square_size_mm=20, dpi=300)
         
         self.assertIsNotNone(img)
         self.assertEqual(len(img.shape), 2)  # Grayscale image
@@ -272,20 +272,12 @@ class TestAndroidCamera(unittest.TestCase):
     """Test Android camera module"""
     
     def test_android_camera_factory(self):
-        """Test Android camera factory function"""
-        from android_camera import get_android_camera, IPWebcamSource, DroidCamSource, RTSPSource
-        
+        """Test Android camera factory function (IP Webcam only)"""
+        from android_camera import get_android_camera, IPWebcamSource
+
         # Test IP Webcam creation
         cam = get_android_camera('ipwebcam', url='http://192.168.1.100:8080')
         self.assertIsInstance(cam, IPWebcamSource)
-        
-        # Test DroidCam creation
-        cam = get_android_camera('droidcam', device_id=1)
-        self.assertIsInstance(cam, DroidCamSource)
-        
-        # Test RTSP creation
-        cam = get_android_camera('rtsp', rtsp_url='rtsp://192.168.1.100:8554/live')
-        self.assertIsInstance(cam, RTSPSource)
     
     def test_ipwebcam_initialization(self):
         """Test IPWebcamSource initialization"""
@@ -295,19 +287,7 @@ class TestAndroidCamera(unittest.TestCase):
         self.assertEqual(cam.url, 'http://192.168.1.100:8080/')
         self.assertEqual(cam.video_url, 'http://192.168.1.100:8080/video')
     
-    def test_droidcam_initialization(self):
-        """Test DroidCamSource initialization"""
-        from android_camera import DroidCamSource
-        
-        cam = DroidCamSource(device_id=2)
-        self.assertEqual(cam.device_id, 2)
-    
-    def test_rtsp_initialization(self):
-        """Test RTSPSource initialization"""
-        from android_camera import RTSPSource
-        
-        cam = RTSPSource('rtsp://192.168.1.100:8554/live')
-        self.assertEqual(cam.rtsp_url, 'rtsp://192.168.1.100:8554/live')
+    # DroidCam/RTSP not supported in this simplified build
 
 
 def run_tests():

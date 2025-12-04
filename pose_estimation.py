@@ -12,8 +12,10 @@ import time
 class PoseEstimator:
     """Estimates camera pose from checkerboard detection"""
     
-    def __init__(self, camera_matrix, dist_coeffs, checkerboard_size=(9, 6), 
-                 square_size=0.025):
+    def __init__(self, camera_matrix, dist_coeffs, checkerboard_size=(7, 9), 
+                 square_size=0.020,
+                 detect_scale=1.0,
+                 detect_interval=1):
         """
         Initialize pose estimator
         
@@ -27,6 +29,11 @@ class PoseEstimator:
         self.dist_coeffs = dist_coeffs
         self.checkerboard_size = checkerboard_size
         self.square_size = square_size
+        # Detection options: scale input for faster detection and interval
+        # detect_scale < 1.0 will downscale the grayscale image for initial detection
+        self.detect_scale = float(detect_scale)
+        self.detect_interval = max(1, int(detect_interval))
+        self._frame_counter = 0
         
         # Prepare object points (3D points in checkerboard coordinate system)
         self.objp = np.zeros((checkerboard_size[0] * checkerboard_size[1], 3), 
@@ -53,16 +60,33 @@ class PoseEstimator:
         Returns:
             Dictionary with pose data or None if detection failed
         """
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        
-        # Find checkerboard corners
+        self._frame_counter += 1
+
+        gray_full = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        # Optionally do detection on a downscaled image to reduce CPU cost
+        gray = gray_full
+        scale_inv = 1.0
+        if self.detect_scale > 0 and self.detect_scale < 1.0:
+            gray = cv2.resize(gray_full, None, fx=self.detect_scale, fy=self.detect_scale, interpolation=cv2.INTER_AREA)
+            scale_inv = 1.0 / self.detect_scale
+
+        # Respect detection interval (skip expensive detection on some frames)
+        if (self._frame_counter % self.detect_interval) != 0:
+            return None
+
+        # Find checkerboard corners on (possibly) scaled grayscale
         ret, corners = cv2.findChessboardCorners(gray, self.checkerboard_size, None)
-        
+
         if not ret:
             return None
-        
-        # Refine corner positions
-        corners_refined = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), 
+
+        # Scale corners back to full resolution if detection was done on scaled image
+        if scale_inv != 1.0:
+            corners = corners * scale_inv
+
+        # Refine corner positions on full-resolution grayscale
+        corners_refined = cv2.cornerSubPix(gray_full, corners, (11, 11), (-1, -1), 
                                           self.criteria)
         
         # Estimate pose

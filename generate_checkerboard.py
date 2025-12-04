@@ -93,12 +93,12 @@ def add_info_text(img, width, height, square_size_mm, dpi):
 def main():
     """Main function"""
     parser = argparse.ArgumentParser(description='Generate checkerboard pattern for AR calibration')
-    parser.add_argument('--width', type=int, default=9,
-                       help='Number of inner corners in width (default: 9)')
-    parser.add_argument('--height', type=int, default=6,
-                       help='Number of inner corners in height (default: 6)')
-    parser.add_argument('--square-size', type=float, default=25,
-                       help='Size of each square in millimeters (default: 25)')
+    parser.add_argument('--width', type=int, default=7,
+                       help='Number of inner corners in width (default: 7)')
+    parser.add_argument('--height', type=int, default=9,
+                       help='Number of inner corners in height (default: 9)')
+    parser.add_argument('--square-size', type=float, default=20,
+                       help='Size of each square in millimeters (default: 20)')
     parser.add_argument('--dpi', type=int, default=300,
                        help='DPI for printing (default: 300)')
     parser.add_argument('--output', default='checkerboard.png',

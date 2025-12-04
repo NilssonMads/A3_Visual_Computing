@@ -15,7 +15,7 @@ from pathlib import Path
 class CameraCalibrator:
     """Handles camera calibration using checkerboard pattern"""
     
-    def __init__(self, checkerboard_size=(9, 6), square_size=0.025):
+    def __init__(self, checkerboard_size=(7, 9), square_size=0.020):
         """
         Initialize calibrator
         
@@ -150,8 +150,8 @@ def main():
     """Main calibration routine"""
     parser = argparse.ArgumentParser(description='Camera Calibration for AR System')
     parser.add_argument('--android', dest='android_method',
-                       choices=['ipwebcam', 'droidcam', 'rtsp'],
-                       help='Use Android phone camera')
+                       choices=['ipwebcam'],
+                       help='Use Android phone camera (IP Webcam)')
     parser.add_argument('--url', default='http://192.168.1.100:8080',
                        help='IP Webcam URL')
     parser.add_argument('--device-id', type=int, default=1,
@@ -165,22 +165,15 @@ def main():
     
     print("=== Camera Calibration ===")
     print("This will calibrate your camera using a checkerboard pattern")
-    print("Default: 9x6 inner corners, 25mm squares")
+    print("Default: 7x9 inner corners, 20mm squares")
     
     # Setup camera
     cap = None
     if args.android_method:
         print(f"\nUsing Android camera: {args.android_method}")
         from android_camera import get_android_camera
-        
-        android_kwargs = {}
-        if args.android_method == 'ipwebcam':
-            android_kwargs['url'] = args.url
-        elif args.android_method == 'droidcam':
-            android_kwargs['device_id'] = args.device_id
-        elif args.android_method == 'rtsp':
-            android_kwargs['rtsp_url'] = args.rtsp_url
-        
+
+        android_kwargs = {'url': args.url}
         cap = get_android_camera(args.android_method, **android_kwargs)
         if not cap.open():
             print("Failed to open Android camera")

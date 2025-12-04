@@ -292,8 +292,8 @@ def main():
     
     # Android camera options
     parser.add_argument('--android', dest='android_method', 
-                       choices=['ipwebcam', 'droidcam', 'rtsp'],
-                       help='Use Android phone camera with specified method')
+                       choices=['ipwebcam'],
+                       help='Use Android phone camera (IP Webcam)')
     parser.add_argument('--url', default='http://192.168.1.100:8080',
                        help='IP Webcam URL (for --android ipwebcam)')
     parser.add_argument('--device-id', type=int, default=1,
@@ -320,24 +320,15 @@ def main():
     
     if use_android:
         print(f"\n=== Setting up Android Camera ({args.android_method}) ===")
-        android_kwargs = {}
-        
-        if args.android_method == 'ipwebcam':
-            android_kwargs['url'] = args.url
-            print(f"URL: {args.url}")
-        elif args.android_method == 'droidcam':
-            android_kwargs['device_id'] = args.device_id
-            print(f"Device ID: {args.device_id}")
-        elif args.android_method == 'rtsp':
-            android_kwargs['rtsp_url'] = args.rtsp_url
-            print(f"RTSP URL: {args.rtsp_url}")
-        
+        android_kwargs = {'url': args.url}
+        print(f"URL: {args.url}")
+
         cap = get_android_camera(args.android_method, **android_kwargs)
-        
+
         if not cap.open():
             print("✗ Failed to open Android camera")
             return
-        
+
         print("✓ Android camera connected successfully\n")
     
     print("\nSelect evaluation to run:")

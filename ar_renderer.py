@@ -114,7 +114,7 @@ class ARRenderer:
         """
         vertices = [
             [0, 0, 0], [size, 0, 0], [size, size, 0], [0, size, 0],  # Bottom
-            [0, 0, size], [size, 0, size], [size, size, size], [0, size, size]  # Top
+            [0, 0, -size], [size, 0, -size], [size, size, -size], [0, size, -size]  # Top (toward camera)
         ]
         
         faces = [
@@ -154,7 +154,7 @@ class ARRenderer:
             [size, 0, 0],
             [size, size, 0],
             [0, size, 0],
-            [size/2, size/2, size]  # Apex
+            [size/2, size/2, -size]  # Apex (toward camera)
         ]
         
         glBegin(GL_TRIANGLES)
@@ -207,10 +207,10 @@ class ARRenderer:
         glVertex3f(0, 0, 0)
         glVertex3f(0, length, 0)
         
-        # Z-axis (Blue)
+        # Z-axis (Blue) - point toward camera (negative Z)
         glColor3f(0, 0, 1)
         glVertex3f(0, 0, 0)
-        glVertex3f(0, 0, length)
+        glVertex3f(0, 0, -length)
         
         glEnd()
         glLineWidth(1.0)
@@ -285,10 +285,10 @@ class SimpleARRenderer:
         Returns:
             Frame with rendered cube
         """
-        # Define cube vertices
+        # Define cube vertices (base on checkerboard plane, top grows along +Z)
         cube_points = np.float32([
             [0, 0, 0], [0, size, 0], [size, size, 0], [size, 0, 0],  # Bottom
-            [0, 0, size], [0, size, size], [size, size, size], [size, 0, size]  # Top
+            [0, 0, -size], [0, size, -size], [size, size, -size], [size, 0, -size]  # Top (toward camera)
         ])
         
         # Project to image plane
@@ -322,6 +322,58 @@ class SimpleARRenderer:
         frame = cv2.addWeighted(overlay, 0.5, frame, 0.5, 0)
         
         return frame
+
+    def render_cube_opencv_grow(self, frame, rvec, tvec, size=0.05, grow=1.0):
+        """
+        Render cube but allow the cube to 'grow' upward from the checkerboard plane.
+
+        Args:
+            frame: Input frame
+            rvec: Rotation vector
+            tvec: Translation vector
+            size: Cube size (base footprint)
+            grow: Fraction [0..1] of height to render (0 = flat, 1 = full height)
+
+        Returns:
+            Frame with rendered cube
+        """
+        grow = max(0.0, min(1.0, float(grow)))
+
+        # Base vertices (z=0), top vertices z = -size * grow (toward camera)
+        cube_points = np.float32([
+            [0, 0, 0], [0, size, 0], [size, size, 0], [size, 0, 0],  # Bottom
+            [0, 0, -size * grow], [0, size, -size * grow], [size, size, -size * grow], [size, 0, -size * grow]
+        ])
+
+        img_points, _ = cv2.projectPoints(cube_points, rvec, tvec,
+                                         self.camera_matrix, self.dist_coeffs)
+        img_points = img_points.astype(int).reshape(-1, 2)
+
+        # Draw edges
+        edges = [
+            (0, 1), (1, 2), (2, 3), (3, 0),  # Bottom
+            (4, 5), (5, 6), (6, 7), (7, 4),  # Top
+            (0, 4), (1, 5), (2, 6), (3, 7)   # Vertical
+        ]
+
+        for i, j in edges:
+            pt1 = tuple(img_points[i])
+            pt2 = tuple(img_points[j])
+            frame = cv2.line(frame, pt1, pt2, (0, 255, 255), 2)
+
+        # Fill faces with transparency (only if grow > 0)
+        if grow > 0:
+            pts = img_points[:4].reshape((-1, 1, 2))
+            overlay = frame.copy()
+            cv2.fillPoly(overlay, [pts], (100, 100, 100))
+            frame = cv2.addWeighted(overlay, 0.3, frame, 0.7, 0)
+
+            pts = img_points[4:8].reshape((-1, 1, 2))
+            overlay = frame.copy()
+            cv2.fillPoly(overlay, [pts], (0, 200, 200))
+            frame = cv2.addWeighted(overlay, 0.5, frame, 0.5, 0)
+
+        return frame
     
     def render_pyramid_opencv(self, frame, rvec, tvec, size=0.05):
         """
@@ -342,7 +394,7 @@ class SimpleARRenderer:
             [size, 0, 0],
             [size, size, 0],
             [0, size, 0],
-            [size/2, size/2, size]  # Apex
+            [size/2, size/2, -size]  # Apex (toward camera)
         ])
         
         # Project to image plane
@@ -377,6 +429,52 @@ class SimpleARRenderer:
         frame = cv2.addWeighted(overlay, 0.4, frame, 0.6, 0)
         
         return frame
+
+    def render_pyramid_opencv_grow(self, frame, rvec, tvec, size=0.05, grow=1.0):
+        """
+        Render pyramid with an animated growth along the apex Z axis.
+        """
+        grow = max(0.0, min(1.0, float(grow)))
+
+        pyramid_points = np.float32([
+            [0, 0, 0],
+            [size, 0, 0],
+            [size, size, 0],
+            [0, size, 0],
+            [size/2, size/2, -size * grow]  # Apex scaled by grow (toward camera)
+        ])
+
+        img_points, _ = cv2.projectPoints(pyramid_points, rvec, tvec,
+                                         self.camera_matrix, self.dist_coeffs)
+        img_points = img_points.astype(int).reshape(-1, 2)
+
+        # Draw edges
+        edges = [
+            (0, 1), (1, 2), (2, 3), (3, 0),  # Base
+            (0, 4), (1, 4), (2, 4), (3, 4)   # To apex
+        ]
+
+        for i, j in edges:
+            pt1 = tuple(img_points[i])
+            pt2 = tuple(img_points[j])
+            frame = cv2.line(frame, pt1, pt2, (255, 200, 0), 2)
+
+        # Fill faces
+        faces = [
+            ([0, 1, 4], (255, 0, 0)),
+            ([1, 2, 4], (0, 255, 0)),
+            ([2, 3, 4], (0, 0, 255)),
+            ([3, 0, 4], (255, 255, 0))
+        ]
+
+        overlay = frame.copy()
+        for face_indices, color in faces:
+            pts = img_points[face_indices].reshape((-1, 1, 2))
+            cv2.fillPoly(overlay, [pts], color)
+
+        frame = cv2.addWeighted(overlay, 0.4, frame, 0.6, 0)
+
+        return frame
     
     def render_axes(self, frame, rvec, tvec, length=0.05):
         """
@@ -395,7 +493,7 @@ class SimpleARRenderer:
             [0, 0, 0],
             [length, 0, 0],
             [0, length, 0],
-            [0, 0, length]
+            [0, 0, -length]
         ])
         
         img_points, _ = cv2.projectPoints(axis_points, rvec, tvec,
@@ -407,4 +505,28 @@ class SimpleARRenderer:
         frame = cv2.line(frame, origin, tuple(img_points[2].ravel()), (0, 255, 0), 3)
         frame = cv2.line(frame, origin, tuple(img_points[3].ravel()), (255, 0, 0), 3)
         
+        return frame
+
+    def render_axes_grow(self, frame, rvec, tvec, length=0.05, grow=1.0):
+        """
+        Render axes where the Z-axis length grows from zero to full length.
+        """
+        grow = max(0.0, min(1.0, float(grow)))
+
+        axis_points = np.float32([
+            [0, 0, 0],
+            [length, 0, 0],
+            [0, length, 0],
+            [0, 0, -length * grow]
+        ])
+
+        img_points, _ = cv2.projectPoints(axis_points, rvec, tvec,
+                                         self.camera_matrix, self.dist_coeffs)
+        img_points = img_points.astype(int)
+
+        origin = tuple(img_points[0].ravel())
+        frame = cv2.line(frame, origin, tuple(img_points[1].ravel()), (0, 0, 255), 3)
+        frame = cv2.line(frame, origin, tuple(img_points[2].ravel()), (0, 255, 0), 3)
+        frame = cv2.line(frame, origin, tuple(img_points[3].ravel()), (255, 0, 0), 3)
+
         return frame

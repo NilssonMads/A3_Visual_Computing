@@ -13,6 +13,78 @@ import subprocess
 import time
 import os
 
+import threading
+
+
+class ThreadedCapture:
+    """Small threaded wrapper around cv2.VideoCapture that keeps the latest frame."""
+
+    def __init__(self, src, backend=None, max_fps=None):
+        self.src = src
+        self.backend = backend
+        self.max_fps = max_fps
+        self.cap = None
+        self.thread = None
+        self.running = False
+        self.frame = None
+        self.ret = False
+        self.lock = threading.Lock()
+
+    def open(self):
+        try:
+            if self.backend is not None:
+                self.cap = cv2.VideoCapture(self.src, self.backend)
+            else:
+                self.cap = cv2.VideoCapture(self.src)
+
+            if not self.cap.isOpened():
+                return False
+
+            self.running = True
+            self.thread = threading.Thread(target=self._reader, daemon=True)
+            self.thread.start()
+            return True
+        except Exception:
+            return False
+
+    def _reader(self):
+        min_delay = 0
+        if self.max_fps and self.max_fps > 0:
+            min_delay = 1.0 / float(self.max_fps)
+
+        while self.running:
+            ret, frame = self.cap.read()
+            if not ret:
+                time.sleep(0.001)
+                continue
+
+            with self.lock:
+                self.ret = True
+                self.frame = frame
+
+            if min_delay > 0:
+                time.sleep(min_delay)
+
+    def read(self):
+        with self.lock:
+            if self.frame is None:
+                return False, None
+            # return a copy to avoid race conditions
+            return True, self.frame.copy()
+
+    def release(self):
+        self.running = False
+        if self.thread is not None:
+            self.thread.join(timeout=0.5)
+        if self.cap is not None:
+            try:
+                self.cap.release()
+            except Exception:
+                pass
+
+    def isOpened(self):
+        return self.cap is not None and self.cap.isOpened()
+
 
 class AndroidCameraSource:
     """Base class for Android camera sources"""
@@ -56,7 +128,7 @@ class IPWebcamSource(AndroidCameraSource):
         4. Use that URL with this class
     """
     
-    def __init__(self, url):
+    def __init__(self, url, threaded=False, max_width=None, max_height=None, max_fps=None):
         """
         Initialize IP Webcam source
         
@@ -68,19 +140,39 @@ class IPWebcamSource(AndroidCameraSource):
         if not url.endswith('/'):
             self.url += '/'
         self.video_url = self.url + 'video'
+        # Optional performance tuning
+        self.threaded = threaded
+        self.max_width = max_width
+        self.max_height = max_height
+        self.max_fps = max_fps
     
     def open(self):
         """Open connection to IP Webcam"""
         try:
-            self.cap = cv2.VideoCapture(self.video_url)
-            self.is_opened = self.cap.isOpened()
+            # Optionally wrap the VideoCapture in a threaded reader to reduce latency
+            if self.threaded:
+                # Use a small threaded capture helper defined below
+                self.cap = ThreadedCapture(self.video_url, max_fps=self.max_fps)
+                self.is_opened = self.cap.open()
+            else:
+                self.cap = cv2.VideoCapture(self.video_url)
+                self.is_opened = self.cap.isOpened()
             
             if self.is_opened:
                 print(f"✓ Connected to IP Webcam at {self.url}")
-                
-                # Get camera info
-                width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+                # Get camera info (support threaded wrapper)
+                try:
+                    if isinstance(self.cap, ThreadedCapture):
+                        # underlying cv2.VideoCapture is at self.cap.cap
+                        width = int(self.cap.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                        height = int(self.cap.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    else:
+                        width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                        height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                except Exception:
+                    width, height = 0, 0
+
                 print(f"  Resolution: {width}x{height}")
             else:
                 print(f"✗ Failed to connect to IP Webcam at {self.url}")
@@ -94,167 +186,32 @@ class IPWebcamSource(AndroidCameraSource):
             print(f"✗ Error connecting to IP Webcam: {e}")
             return False
 
+    def read(self):
+        """Read a frame and optionally resize to max dimensions"""
+        if self.cap is None:
+            return False, None
 
-class DroidCamSource(AndroidCameraSource):
-    """
-    Stream from DroidCam Android app
-    
-    Download DroidCam from Google Play Store:
-    https://play.google.com/store/apps/details?id=com.dev47apps.droidcam
-    
-    Also install DroidCam Client on computer:
-    https://www.dev47apps.com/droidcam/linux/
-    
-    Usage:
-        1. Install DroidCam app on Android
-        2. Install DroidCam Client on computer
-        3. Start DroidCam on phone
-        4. Connect using WiFi or USB
-        5. DroidCam creates a virtual webcam device
-    """
-    
-    def __init__(self, device_id=1):
-        """
-        Initialize DroidCam source
-        
-        Args:
-            device_id: Camera device ID (DroidCam usually creates /dev/video1 or similar)
-        """
-        super().__init__()
-        self.device_id = device_id
-    
-    def open(self):
-        """Open DroidCam virtual camera"""
+        ret, frame = self.cap.read()
+        if not ret or frame is None:
+            return False, None
+
+        # Resize if requested (preserve aspect ratio)
         try:
-            self.cap = cv2.VideoCapture(self.device_id)
-            self.is_opened = self.cap.isOpened()
-            
-            if self.is_opened:
-                print(f"✓ Connected to DroidCam on device {self.device_id}")
-                
-                # Get camera info
-                width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                print(f"  Resolution: {width}x{height}")
-            else:
-                print(f"✗ Failed to open DroidCam device {self.device_id}")
-                print("  Make sure DroidCam Client is running and connected")
-            
-            return self.is_opened
-        except Exception as e:
-            print(f"✗ Error opening DroidCam: {e}")
-            return False
+            if self.max_width and self.max_width > 0:
+                h, w = frame.shape[:2]
+                if w > self.max_width:
+                    scale = float(self.max_width) / float(w)
+                    new_w = int(w * scale)
+                    new_h = int(h * scale)
+                    frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        except Exception:
+            pass
+
+        return True, frame
 
 
-class ADBWebcamSource(AndroidCameraSource):
-    """
-    Stream camera using ADB (Android Debug Bridge)
-    
-    Requires:
-        - ADB installed on computer
-        - USB debugging enabled on Android phone
-        - Phone connected via USB
-    
-    Uses screenrecord to capture camera preview
-    """
-    
-    def __init__(self, quality='720x1280', bitrate='8M'):
-        """
-        Initialize ADB webcam source
-        
-        Args:
-            quality: Video resolution
-            bitrate: Video bitrate
-        """
-        super().__init__()
-        self.quality = quality
-        self.bitrate = bitrate
-        self.adb_process = None
-    
-    def check_adb(self):
-        """Check if ADB is available and device is connected"""
-        try:
-            # Check if adb is installed
-            result = subprocess.run(['adb', 'version'], 
-                                  capture_output=True, text=True, timeout=5)
-            if result.returncode != 0:
-                print("✗ ADB not found. Please install Android Debug Bridge")
-                return False
-            
-            # Check if device is connected
-            result = subprocess.run(['adb', 'devices'], 
-                                  capture_output=True, text=True, timeout=5)
-            
-            lines = result.stdout.strip().split('\n')
-            devices = [line for line in lines[1:] if line.strip() and 'device' in line]
-            
-            if not devices:
-                print("✗ No Android device connected via ADB")
-                print("  Make sure:")
-                print("  1. USB debugging is enabled on phone")
-                print("  2. Phone is connected via USB")
-                print("  3. USB debugging permission granted")
-                return False
-            
-            print(f"✓ ADB found, {len(devices)} device(s) connected")
-            return True
-            
-        except FileNotFoundError:
-            print("✗ ADB not found. Please install Android Debug Bridge")
-            return False
-        except Exception as e:
-            print(f"✗ Error checking ADB: {e}")
-            return False
-    
-    def open(self):
-        """Open ADB camera stream"""
-        if not self.check_adb():
-            return False
-        
-        print("⚠ Note: ADB webcam method has limitations")
-        print("  Consider using IP Webcam or DroidCam for better performance")
-        
-        # This is a placeholder - full ADB webcam implementation is complex
-        # Would require starting camera app and capturing frames
-        print("✗ ADB webcam not fully implemented")
-        print("  Please use IP Webcam or DroidCam instead")
-        return False
-
-
-class RTSPSource(AndroidCameraSource):
-    """
-    Stream from phone camera using RTSP protocol
-    
-    Requires an app that supports RTSP streaming, such as:
-    - IP Webcam (RTSP option)
-    - RTSP Camera Server
-    """
-    
-    def __init__(self, rtsp_url):
-        """
-        Initialize RTSP source
-        
-        Args:
-            rtsp_url: RTSP stream URL (e.g., "rtsp://192.168.1.100:8554/live")
-        """
-        super().__init__()
-        self.rtsp_url = rtsp_url
-    
-    def open(self):
-        """Open RTSP stream"""
-        try:
-            self.cap = cv2.VideoCapture(self.rtsp_url)
-            self.is_opened = self.cap.isOpened()
-            
-            if self.is_opened:
-                print(f"✓ Connected to RTSP stream at {self.rtsp_url}")
-            else:
-                print(f"✗ Failed to connect to RTSP stream at {self.rtsp_url}")
-            
-            return self.is_opened
-        except Exception as e:
-            print(f"✗ Error connecting to RTSP stream: {e}")
-            return False
+# Note: Only IPWebcamSource is supported in this simplified build.
+# Other methods (DroidCam, RTSP, ADB) were removed to focus on IP Webcam app usage.
 
 
 def get_android_camera(method='ipwebcam', **kwargs):
@@ -269,24 +226,16 @@ def get_android_camera(method='ipwebcam', **kwargs):
         AndroidCameraSource instance
     """
     method = method.lower()
-    
-    if method == 'ipwebcam':
-        url = kwargs.get('url', 'http://192.168.1.100:8080')
-        return IPWebcamSource(url)
-    
-    elif method == 'droidcam':
-        device_id = kwargs.get('device_id', 1)
-        return DroidCamSource(device_id)
-    
-    elif method == 'rtsp':
-        rtsp_url = kwargs.get('rtsp_url', 'rtsp://192.168.1.100:8554/live')
-        return RTSPSource(rtsp_url)
-    
-    elif method == 'adb':
-        return ADBWebcamSource()
-    
-    else:
-        raise ValueError(f"Unknown method: {method}")
+
+    if method != 'ipwebcam':
+        raise ValueError("Only 'ipwebcam' method is supported in this build. Please use the IP Webcam app and provide the URL via the --url flag.")
+
+    url = kwargs.get('url', 'http://192.168.1.100:8080')
+    threaded = kwargs.get('threaded', False)
+    max_width = kwargs.get('max_width', None)
+    max_height = kwargs.get('max_height', None)
+    max_fps = kwargs.get('max_fps', None)
+    return IPWebcamSource(url, threaded=threaded, max_width=max_width, max_height=max_height, max_fps=max_fps)
 
 
 def test_android_camera(method='ipwebcam', **kwargs):
@@ -419,8 +368,8 @@ def main():
     
     parser = argparse.ArgumentParser(description='Android Phone Camera for AR System')
     parser.add_argument('--method', default='ipwebcam',
-                       choices=['ipwebcam', 'droidcam', 'rtsp', 'adb'],
-                       help='Connection method')
+                       choices=['ipwebcam'],
+                       help='Connection method (IP Webcam only)')
     parser.add_argument('--url', default='http://192.168.1.100:8080',
                        help='IP Webcam URL')
     parser.add_argument('--device-id', type=int, default=1,
@@ -436,16 +385,9 @@ def main():
         print_setup_instructions()
         return
     
-    # Test camera
-    kwargs = {}
-    if args.method == 'ipwebcam':
-        kwargs['url'] = args.url
-    elif args.method == 'droidcam':
-        kwargs['device_id'] = args.device_id
-    elif args.method == 'rtsp':
-        kwargs['rtsp_url'] = args.rtsp_url
-    
-    test_android_camera(args.method, **kwargs)
+    # Test camera (IP Webcam only)
+    kwargs = {'url': args.url}
+    test_android_camera('ipwebcam', **kwargs)
 
 
 if __name__ == "__main__":

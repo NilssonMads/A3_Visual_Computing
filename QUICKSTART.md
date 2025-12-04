@@ -59,9 +59,9 @@ python generate_checkerboard.py --output checkerboard.png
 ```
 
 **Options:**
-- `--width 9` - Number of inner corners (width)
-- `--height 6` - Number of inner corners (height)
-- `--square-size 25` - Square size in mm
+- `--width 7` - Number of inner corners (width)
+- `--height 9` - Number of inner corners (height)
+- `--square-size 20` - Square size in mm
 - `--dpi 300` - Print resolution
 
 **Print the checkerboard:**
@@ -79,16 +79,9 @@ Run camera calibration:
 python camera_calibration.py
 ```
 
-**For Android phone camera:**
+**For Android phone camera (IP Webcam):**
 ```bash
-# Using IP Webcam
 python camera_calibration.py --android ipwebcam --url http://YOUR_PHONE_IP:8080
-
-# Using DroidCam
-python camera_calibration.py --android droidcam --device-id 1
-
-# Using RTSP
-python camera_calibration.py --android rtsp --rtsp-url rtsp://YOUR_PHONE_IP:8554/live
 ```
 
 **Instructions:**
@@ -117,16 +110,9 @@ Launch the AR application:
 python ar_system.py
 ```
 
-**For Android phone camera:**
+**For Android phone camera (IP Webcam):**
 ```bash
-# Using IP Webcam
 python ar_system.py --android ipwebcam --url http://YOUR_PHONE_IP:8080
-
-# Using DroidCam
-python ar_system.py --android droidcam --device-id 1
-
-# Using RTSP
-python ar_system.py --android rtsp --rtsp-url rtsp://YOUR_PHONE_IP:8554/live
 ```
 
 **Controls:**
@@ -153,16 +139,9 @@ Run performance evaluation:
 python evaluate_system.py
 ```
 
-**For Android phone camera:**
+**For Android phone camera (IP Webcam):**
 ```bash
-# Using IP Webcam
 python evaluate_system.py --android ipwebcam --url http://YOUR_PHONE_IP:8080
-
-# Using DroidCam
-python evaluate_system.py --android droidcam --device-id 1
-
-# Using RTSP
-python evaluate_system.py --android rtsp --rtsp-url rtsp://YOUR_PHONE_IP:8554/live
 ```
 
 **Choose evaluation type:**

@@ -179,25 +179,13 @@ The system follows a modular architecture with clear separation of concerns:
 
 **Purpose**: Enable using Android phone as a wireless camera source for the AR system.
 
-**Supported Methods**:
+**Supported Method**:
 
-**a) IP Webcam** (Recommended):
+**IP Webcam** (Recommended):
 - Uses IP Webcam Android app
 - Streams video over WiFi via HTTP
 - Easy setup, no additional software required
 - Good video quality and performance
-
-**b) DroidCam**:
-- Uses DroidCam Android app + desktop client
-- Supports both WiFi and USB connections
-- Excellent video quality
-- Requires DroidCam Client installation
-
-**c) RTSP**:
-- Uses RTSP streaming protocol
-- Requires RTSP-compatible Android app
-- Standard protocol for advanced users
-- Good for custom setups
 
 **Key Features**:
 - Modular design with base class and specialized implementations
@@ -344,7 +332,7 @@ This implementation is designed for learning:
 6. No multi-camera support
 
 **Assumptions**:
-1. Checkerboard pattern is known (9x6, 25mm squares)
+1. Checkerboard pattern is known (7x9, 20mm squares)
 2. Pattern is rigid and flat
 3. Camera has reasonable quality (modern webcam)
 4. Adequate lighting (indoor/outdoor daylight)
