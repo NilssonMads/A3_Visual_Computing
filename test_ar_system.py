@@ -6,7 +6,6 @@ Tests functionality that doesn't require camera/display
 
 import unittest
 import numpy as np
-import cv2
 import os
 import sys
 import tempfile
