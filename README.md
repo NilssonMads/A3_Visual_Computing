@@ -4,24 +4,20 @@ Take-Home assignment for the course Visual Computing
 
 ## Overview
 
-This project implements a minimal augmented reality (AR) system using a checkerboard pattern for camera pose estimation. The system uses OpenCV for detecting checkerboard corners and computing extrinsic camera parameters, then renders virtual 3D objects (cubes, pyramids, coordinate frames) in the correct position and orientation on top of the checkerboard.
+This project implements a minimal augmented reality (AR) system using a checkerboard pattern for camera pose estimation. The system detects checkerboard corners in real-time, estimates the camera pose relative to the pattern, and renders virtual 3D objects (cubes, pyramids, coordinate frames) directly on top of the checkerboard.
 
 ## Features
 
 - **Camera Calibration**: Automated camera calibration using checkerboard patterns
-- **Android Phone Camera Support**: Use your Android phone as a wireless camera
-  - IP Webcam method (recommended)
-- **Pose Estimation**: Real-time camera pose estimation relative to the checkerboard
-- **3D Rendering**: Multiple rendering modes including:
+- **Multiple Camera Sources**: Support for local webcams and Android phones (via IP Webcam app)
+- **Real-time Pose Estimation**: Efficient pose estimation with detection skipping and downscaling for reduced latency
+- **3D Object Rendering**: Multiple rendering modes:
   - 3D Cube
   - 3D Pyramid
   - Coordinate axes
   - Combined visualization
-- **Performance Evaluation**: Tools for measuring:
-  - System latency
-  - Pose stability
-  - Detection rate
-  - Visual alignment quality
+- **Robust Reconnection**: Gracefully handles video connection interruptions with automatic reconnection
+- **Performance Optimization**: Features including frame skipping, detection downscaling, and threaded capture
 
 ## Requirements
 
@@ -60,15 +56,13 @@ You can generate a checkerboard pattern using:
 
 You can use either a local webcam or your Android phone as the camera source.
 
-#### Option A: Local Webcam (Default)
+#### Local Webcam (Default)
 
 Simply connect a USB webcam or use your laptop's built-in camera. No additional setup needed.
 
-#### Option B: Android Phone Camera (Recommended for Mobility)
+#### Android Phone Camera (IP Webcam App)
 
-Use your Android phone as a wireless camera for better flexibility and mobility.
-
-**Method 1: IP Webcam (Easiest)**
+Use your Android phone as a wireless camera.
 
 1. Install "IP Webcam" app from Google Play Store
 2. Open the app and scroll to the bottom
@@ -76,34 +70,9 @@ Use your Android phone as a wireless camera for better flexibility and mobility.
 4. Note the URL displayed (e.g., `http://192.168.1.100:8080`)
 5. Ensure your phone and computer are on the same WiFi network
 
-**Method 2: DroidCam**
-
-1. Install "DroidCam" app from Google Play Store
-2. Install DroidCam Client on your computer from https://www.dev47apps.com/droidcam/
-3. Start DroidCam on your phone
-4. Connect via WiFi or USB using the DroidCam Client
-
-**Method 3: RTSP Stream**
-
-1. Install an RTSP streaming app (e.g., "RTSP Camera Server")
-2. Start the RTSP server
-3. Note the RTSP URL
-
-For detailed Android setup instructions:
+Test your connection:
 ```bash
-python android_camera.py --setup
-```
-
-Test your Android camera connection:
-```bash
-# For IP Webcam
-python android_camera.py --method ipwebcam --url http://YOUR_PHONE_IP:8080
-
-# For DroidCam
-python android_camera.py --method droidcam --device-id 1
-
-# For RTSP
-python android_camera.py --method rtsp --rtsp-url rtsp://YOUR_PHONE_IP:8554/live
+python android_camera.py --url http://YOUR_PHONE_IP:8080
 ```
 
 ### 3. Camera Calibration
@@ -115,16 +84,9 @@ Before using the AR system, you must calibrate your camera.
 python camera_calibration.py
 ```
 
-**For Android phone camera:**
+**For Android phone camera (IP Webcam):**
 ```bash
-# Using IP Webcam
 python camera_calibration.py --android ipwebcam --url http://YOUR_PHONE_IP:8080
-
-# Using DroidCam
-python camera_calibration.py --android droidcam --device-id 1
-
-# Using RTSP
-python camera_calibration.py --android rtsp --rtsp-url rtsp://YOUR_PHONE_IP:8554/live
 ```
 
 **Instructions**:
@@ -141,12 +103,16 @@ python camera_calibration.py --android rtsp --rtsp-url rtsp://YOUR_PHONE_IP:8554
 - Include some tilted views
 - Ensure good lighting
 
-### 3. Run the AR System
+### 4. Run the AR System
 
 Once calibrated, run the main AR application:
 
 ```bash
+# Local webcam
 python ar_system.py
+
+# Android phone with IP Webcam
+python ar_system.py --android ipwebcam --url http://YOUR_PHONE_IP:8080
 ```
 
 **Controls**:
@@ -157,20 +123,17 @@ python ar_system.py
 - **S** - Save performance report
 - **ESC** - Exit application
 
-### 5. Evaluate System Performance
+**Performance Tuning Options**:
+- `--detect-scale`: Detection downscale factor (0.3-1.0, lower = faster, default 0.5)
+- `--detect-interval`: Run detection every Nth frame (default 2)
+- `--frame-skip`: Process pose/render every Nth frame (default 1)
+- `--android-threaded`: Use threaded reader for Android camera
+- `--android-max-width`: Resize incoming frames (0 = no resize)
 
-Run comprehensive evaluation tests:
-
+Example with optimizations:
 ```bash
-python evaluate_system.py
+python ar_system.py --android ipwebcam --url http://192.168.1.100:8080 --detect-scale 0.6 --frame-skip 2
 ```
-
-This will evaluate:
-1. **Latency**: Processing time per frame
-2. **Detection Rate**: Percentage of frames where checkerboard is detected
-3. **Pose Stability**: Variance in estimated pose over time
-
-Results are saved to `evaluation_report.json` and `evaluation_report.txt`.
 
 ## Project Structure
 
@@ -198,34 +161,33 @@ A3_Visual_Computing/
 
 The system uses Zhang's calibration method implemented in OpenCV:
 - Detects checkerboard corners using `cv2.findChessboardCorners()`
-- Refines corner positions with sub-pixel accuracy
-- Computes camera intrinsic matrix and distortion coefficients
+- Refines corner positions with sub-pixel accuracy using `cv2.cornerSubPix()`
+- Computes camera intrinsic matrix and distortion coefficients using Zhang's method
 - Saves calibration data for reuse
 
 ### Pose Estimation
 
 Pose estimation pipeline:
-1. Detect checkerboard corners in input frame
+1. Detect checkerboard corners in input frame (with optional downscaling for speed)
 2. Match corners to 3D checkerboard model
-3. Solve PnP (Perspective-n-Point) problem using `cv2.solvePnP()`
-4. Extract rotation and translation vectors
-5. Track pose history for stability analysis
+3. Solve PnP problem using `cv2.solvePnP()`
+4. Track pose history for stability analysis
+5. Reuse last known pose on skipped frames to reduce computation
+
+### Performance Optimizations
+
+- **Detection Downscaling**: Run corner detection on downscaled images (`--detect-scale`)
+- **Detection Interval**: Skip detection on some frames (`--detect-interval`)
+- **Frame Skipping**: Process pose/rendering only on selected frames (`--frame-skip`)
+- **Threaded Capture**: Non-blocking frame reads for Android cameras (`--android-threaded`)
+- **Adaptive Resolution**: Downscale incoming frames for lower latency (`--android-max-width`)
 
 ### 3D Rendering
 
-Two rendering approaches are implemented:
-
-**OpenCV-based rendering** (default):
-- Uses `cv2.projectPoints()` to project 3D points to 2D
-- Renders objects using OpenCV drawing functions
-- Lightweight and fast
-- No external display window required
-
-**OpenGL-based rendering** (available in ar_renderer.py):
-- Full 3D rendering pipeline
-- Hardware-accelerated graphics
-- More realistic lighting and shading
-- Requires separate display window
+- Uses `cv2.projectPoints()` to project 3D model points to 2D image plane
+- Renders objects using OpenCV drawing functions (lightweight and fast)
+- Supports multiple rendering modes (cube, pyramid, axes, combined)
+- Objects appear directly on top of the checkerboard pattern
 
 ### Performance Characteristics
 
@@ -276,19 +238,18 @@ This AR system is ideal for:
 ## Limitations and Future Work
 
 ### Current Limitations
-- Requires printed checkerboard marker
+- Requires printed checkerboard marker (not natural features)
 - Single marker tracking only
 - No occlusion handling
 - Limited to planar markers
 
 ### Potential Improvements
-- Multiple marker tracking
-- Custom marker designs (ArUco markers)
-- Kalman filtering for smoother pose
-- Occlusion detection and handling
-- More complex 3D models
-- Texture mapping
-- Shadow rendering
+- Natural feature tracking (SIFT, SURF, ORB)
+- Multiple marker support
+- Kalman filtering for smoother tracking
+- Occlusion detection
+- More complex 3D model rendering
+- Texture mapping and advanced shading
 
 ## Troubleshooting
 
@@ -318,23 +279,26 @@ This AR system is ideal for:
 python ar_system.py --help
 ```
 
-Options:
-- `--calibration`: Path to calibration file (default: calibration.pkl)
-- `--camera`: Camera device ID (default: 0)
-- `--checkerboard-width`: Number of inner corners in width (default: 7)
-- `--checkerboard-height`: Number of inner corners in height (default: 9)
-- `--square-size`: Size of checkerboard squares in meters (default: 0.020)
+Key options:
+- `--camera`: Camera device ID for local webcam (default: 0)
+- `--android ipwebcam`: Use IP Webcam app from Android phone
+- `--url`: IP Webcam URL (default: http://192.168.1.100:8080)
+- `--detect-scale`: Detection downscale factor 0.3-1.0 (default: 0.5)
+- `--detect-interval`: Run detection every Nth frame (default: 2)
+- `--frame-skip`: Process every Nth frame (default: 1)
+- `--android-threaded`: Use threaded reader for Android camera
+- `--android-max-width`: Resize incoming frames to max width
 
-Example:
+Examples:
 ```bash
-# Local webcam with custom checkerboard
-python ar_system.py --camera 1 --checkerboard-width 7 --checkerboard-height 5
+# Local webcam
+python ar_system.py
 
 # Android phone with IP Webcam
-python ar_system.py --android ipwebcam --url http://192.168.1.105:8080
+python ar_system.py --android ipwebcam --url http://192.168.1.100:8080
 
-# Android phone with IP Webcam
-python ar_system.py --android ipwebcam --url http://192.168.1.105:8080
+# Optimized for speed (lower latency)
+python ar_system.py --android ipwebcam --url http://192.168.1.100:8080 --detect-scale 0.5 --frame-skip 2 --android-threaded
 ```
 
 ## References
