@@ -204,10 +204,6 @@ class IPWebcamSource(AndroidCameraSource):
         return True, frame
 
 
-# Note: Only IPWebcamSource is supported in this simplified build.
-# Other methods (DroidCam, RTSP, ADB) were removed to focus on IP Webcam app usage.
-
-
 def get_android_camera(method='ipwebcam', **kwargs):
     """
     Get Android camera source
@@ -294,7 +290,7 @@ def print_setup_instructions():
 Choose one of the following methods:
 
 ┌─────────────────────────────────────────────────────────────────┐
-│ Method 1: IP Webcam (RECOMMENDED - Easiest)                    │
+│ IP Webcam                                               │
 └─────────────────────────────────────────────────────────────────┘
 
 1. Install "IP Webcam" app from Google Play Store
@@ -306,53 +302,6 @@ Choose one of the following methods:
    python ar_system.py --android ipwebcam --url http://YOUR_PHONE_IP:8080
 
 ┌─────────────────────────────────────────────────────────────────┐
-│ Method 2: DroidCam (Good quality, requires client software)    │
-└─────────────────────────────────────────────────────────────────┘
-
-1. Install "DroidCam" app from Google Play Store
-2. Install DroidCam Client on your computer:
-   - Linux: https://www.dev47apps.com/droidcam/linux/
-   - Windows: https://www.dev47apps.com/droidcam/windows/
-3. Start DroidCam app on phone
-4. Connect via WiFi or USB using DroidCam Client
-5. DroidCam creates a virtual webcam device
-6. Use this command:
-   
-   python ar_system.py --android droidcam --device-id 1
-
-┌─────────────────────────────────────────────────────────────────┐
-│ Method 3: RTSP Stream (Advanced)                               │
-└─────────────────────────────────────────────────────────────────┘
-
-1. Install an RTSP streaming app (e.g., "RTSP Camera Server")
-2. Start RTSP server in the app
-3. Note the RTSP URL (e.g., rtsp://192.168.1.100:8554/live)
-4. Use this command:
-   
-   python ar_system.py --android rtsp --rtsp-url rtsp://YOUR_PHONE_IP:8554/live
-
-┌─────────────────────────────────────────────────────────────────┐
-│ Troubleshooting                                                 │
-└─────────────────────────────────────────────────────────────────┘
-
-Common issues:
-
-1. "Cannot connect to camera"
-   → Ensure phone and computer are on same WiFi network
-   → Check firewall settings
-   → Verify URL/IP address is correct
-
-2. "Low FPS / Laggy video"
-   → Reduce video quality in app settings
-   → Use USB connection (DroidCam) instead of WiFi
-   → Close other apps on phone
-
-3. "Connection timeout"
-   → Check phone's IP address hasn't changed
-   → Disable power saving mode on phone
-   → Ensure app hasn't been killed by system
-
-═══════════════════════════════════════════════════════════════════
 """)
 
 
@@ -366,13 +315,6 @@ def main():
                        help='Connection method (IP Webcam only)')
     parser.add_argument('--url', default='http://192.168.1.100:8080',
                        help='IP Webcam URL')
-    parser.add_argument('--device-id', type=int, default=1,
-                       help='DroidCam device ID')
-    parser.add_argument('--rtsp-url', default='rtsp://192.168.1.100:8554/live',
-                       help='RTSP stream URL')
-    parser.add_argument('--setup', action='store_true',
-                       help='Show setup instructions')
-    
     args = parser.parse_args()
     
     if args.setup:
