@@ -139,20 +139,19 @@ python ar_system.py --android ipwebcam --url http://192.168.1.100:8080 --detect-
 
 ```
 A3_Visual_Computing/
-├── camera_calibration.py   # Camera calibration module
-├── pose_estimation.py      # Pose estimation and tracking
-├── ar_renderer.py          # 3D object rendering
-├── ar_system.py            # Main AR application
-├── android_camera.py       # Android phone camera integration
-├── evaluate_system.py      # Performance evaluation tools
-├── generate_checkerboard.py # Checkerboard pattern generator
-├── test_installation.py    # Installation verification
-├── test_ar_system.py       # Unit tests
-├── requirements.txt        # Python dependencies
-├── README.md              # This file
-├── QUICKSTART.md          # Quick start guide
-├── IMPLEMENTATION.md      # Implementation details
-└── calibration.pkl        # Generated camera calibration (after running calibration)
+├── android_camera.py         # Android phone camera integration
+├── ar_renderer.py            # 3D object rendering (OpenCV and OpenGL)
+├── ar_system.py              # Main AR application with optimization options
+├── camera_calibration.py     # Camera calibration module
+├── evaluate_system.py        # Performance evaluation tools
+├── generate_checkerboard.py  # Checkerboard pattern generator
+├── pose_estimation.py        # Pose estimation with adaptive detection
+├── test_ar_system.py         # Unit tests
+├── test_installation.py      # Installation verification
+├── requirements.txt          # Python dependencies
+├── README.md                 # This file
+├── calibration.pkl           # Generated camera calibration (created after calibration)
+└── checkerboard.png          # Generated checkerboard pattern
 ```
 
 ## Technical Details
@@ -196,121 +195,3 @@ Typical performance on modern hardware:
 - **FPS**: 30-60 FPS
 - **Detection Rate**: >95% under good lighting
 - **Pose Stability**: Sub-millimeter precision when stationary
-
-## Evaluation Results
-
-The system has been tested under various conditions:
-
-### Lighting Conditions
-- **Bright lighting**: Optimal performance, >95% detection rate
-- **Normal indoor**: Good performance, 85-95% detection rate
-- **Dim lighting**: Reduced performance, may require tuning
-
-### Viewing Angles
-- **Frontal (0-30°)**: Excellent detection and pose accuracy
-- **Moderate (30-60°)**: Good performance with slight accuracy reduction
-- **Extreme (>60°)**: Detection becomes challenging
-
-### Visual Alignment
-- Objects appear stable and properly aligned when checkerboard is still
-- Slight jitter may occur due to corner detection noise
-- Pose filtering can be added for smoother tracking
-
-## Educational Applications
-
-This AR system is ideal for:
-
-1. **Computer Vision Education**
-   - Understanding camera calibration
-   - Learning pose estimation techniques
-   - Visualizing 3D transformations
-
-2. **AR Fundamentals**
-   - Marker-based tracking concepts
-   - Real-time rendering basics
-   - Performance optimization
-
-3. **Rapid Prototyping**
-   - Quick AR concept validation
-   - Testing different marker patterns
-   - Experimenting with rendering techniques
-
-## Limitations and Future Work
-
-### Current Limitations
-- Requires printed checkerboard marker (not natural features)
-- Single marker tracking only
-- No occlusion handling
-- Limited to planar markers
-
-### Potential Improvements
-- Natural feature tracking (SIFT, SURF, ORB)
-- Multiple marker support
-- Kalman filtering for smoother tracking
-- Occlusion detection
-- More complex 3D model rendering
-- Texture mapping and advanced shading
-
-## Troubleshooting
-
-### Checkerboard Not Detected
-- Ensure good lighting without glare
- - Check that checkerboard pattern is correct (7x9 inner corners)
-- Make sure pattern is flat and not warped
-- Try different distances from camera
-
-### Poor Pose Stability
-- Recalibrate camera with more images
-- Ensure checkerboard is on rigid surface
-- Check for camera motion blur
-- Improve lighting conditions
-
-### Low FPS
-- Reduce image resolution
-- Close other applications
-- Check camera driver settings
-- Consider hardware acceleration
-
-## Command-Line Options
-
-### ar_system.py
-
-```bash
-python ar_system.py --help
-```
-
-Key options:
-- `--camera`: Camera device ID for local webcam (default: 0)
-- `--android ipwebcam`: Use IP Webcam app from Android phone
-- `--url`: IP Webcam URL (default: http://192.168.1.100:8080)
-- `--detect-scale`: Detection downscale factor 0.3-1.0 (default: 0.5)
-- `--detect-interval`: Run detection every Nth frame (default: 2)
-- `--frame-skip`: Process every Nth frame (default: 1)
-- `--android-threaded`: Use threaded reader for Android camera
-- `--android-max-width`: Resize incoming frames to max width
-
-Examples:
-```bash
-# Local webcam
-python ar_system.py
-
-# Android phone with IP Webcam
-python ar_system.py --android ipwebcam --url http://192.168.1.100:8080
-
-# Optimized for speed (lower latency)
-python ar_system.py --android ipwebcam --url http://192.168.1.100:8080 --detect-scale 0.5 --frame-skip 2 --android-threaded
-```
-
-## References
-
-- OpenCV Camera Calibration: https://docs.opencv.org/master/dc/dbb/tutorial_py_calibration.html
-- Pose Estimation: https://docs.opencv.org/master/d7/d53/tutorial_py_pose.html
-- Zhang's Calibration Method: Z. Zhang, "A flexible new technique for camera calibration"
-
-## License
-
-This project is created for educational purposes as part of the Visual Computing course.
-
-## Author
-
-Visual Computing Course - AR System Implementation
