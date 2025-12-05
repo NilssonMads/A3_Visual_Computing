@@ -1,7 +1,7 @@
 # A3_Visual_Computing - Minimal Augmented Reality System
 
 Take-Home assignment for the course Visual Computing
-
+By Mads Møllerskov Nilsson, 201808790
 ## Overview
 
 This project implements a minimal augmented reality (AR) system using a checkerboard pattern for camera pose estimation. The system detects checkerboard corners in real-time, estimates the camera pose relative to the pattern, and renders virtual 3D objects (cubes, pyramids, coordinate frames) directly on top of the checkerboard.
@@ -187,11 +187,3 @@ Pose estimation pipeline:
 - Renders objects using OpenCV drawing functions (lightweight and fast)
 - Supports multiple rendering modes (cube, pyramid, axes, combined)
 - Objects appear directly on top of the checkerboard pattern
-
-### Performance Characteristics
-
-Typical performance on modern hardware:
-- **Latency**: 10-30ms per frame
-- **FPS**: 30-60 FPS
-- **Detection Rate**: >95% under good lighting
-- **Pose Stability**: Sub-millimeter precision when stationary
